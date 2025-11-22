@@ -2581,9 +2581,15 @@ CombatMainSection:CreateToggle({
     Callback = function(value)
         state.rageMode = value
         if value then
-            RageSystem.startRageMode()
+            if RageSystem and RageSystem.startRageMode then
+                RageSystem.startRageMode()
+            else
+                warn("RageSystem.startRageMode is missing")
+            end
         else
-            RageSystem.stopRageMode()
+            if RageSystem and RageSystem.stopRageMode then
+                RageSystem.stopRageMode()
+            end
         end
         queueConfigSave()
     end
@@ -3952,7 +3958,9 @@ LocalPlayer.CharacterAdded:Connect(function(c)
     refreshMovementBypass()
 
     if state.rageMode then
-        startRageMode()
+        if RageSystem and RageSystem.startRageMode then
+            RageSystem.startRageMode()
+        end
     end
     
     if state.noclip and connections.noclip then
