@@ -1696,11 +1696,12 @@ function RageSystem.scanForRageTarget(params)
             continue
         end
 
-        if not ignoreSpawnProtection and RageSettings.RespectForceFields then
-            if character:FindFirstChildOfClass("ForceField") then
-                continue
-            end
-        end
+        -- Removed ForceField check to target spawned players
+        -- if not ignoreSpawnProtection and RageSettings.RespectForceFields then
+        --     if character:FindFirstChildOfClass("ForceField") then
+        --         continue
+        --     end
+        -- end
 
         local root = RageSystem.getCharacterRoot(character)
         if not root then
@@ -2138,6 +2139,12 @@ function RageSystem.startRageMode()
         RageSystem.updateRageAimTarget(targetRoot)
         RageSystem.lockRageCamera(targetRoot)
         RageSystem.rageAutoFire()
+        
+        -- ForceField Removal (Visual/Targeting)
+        if targetRoot.Parent then
+            local ff = targetRoot.Parent:FindFirstChildOfClass("ForceField")
+            if ff then ff:Destroy() end
+        end
     end)
 end
 
@@ -2643,7 +2650,39 @@ GunModsSection:CreateToggle({
     CurrentValue = false,
     Callback = function(value)
         state.noSpread = value
-        -- Hook handled in namecall
+        if value then
+            -- Hooking namecall for No Spread
+            local mt = getrawmetatable(game)
+            local oldNamecall = mt.__namecall
+            setreadonly(mt, false)
+            
+            mt.__namecall = newcclosure(function(self, ...)
+                local method = getnamecallmethod()
+                local args = {...}
+                
+                if state.noSpread and (method == "FireServer" or method == "InvokeServer") then
+                    if self.Name == "Fire" or self.Name == "Shoot" or self.Name == "Hit" then
+                        -- Arsenal usually passes direction/position in args
+                        -- This is a generic "force center" approach
+                        if Camera then
+                            -- Look for Vector3 args that might be direction
+                            for i, v in ipairs(args) do
+                                if typeof(v) == "Vector3" then
+                                    -- If it looks like a direction (unit vectorish) or position
+                                    -- Force it to look vector
+                                    args[i] = Camera.CFrame.LookVector * 1000 -- Or just LookVector
+                                end
+                            end
+                        end
+                        return oldNamecall(self, unpack(args))
+                    end
+                end
+                
+                return oldNamecall(self, ...)
+            end)
+            
+            setreadonly(mt, true)
+        end
     end
 })
 
