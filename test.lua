@@ -537,7 +537,6 @@ local RageSettings = {
     NewPlayerPriorityBonus = 35,
     DesperateTargetDelay = 2.5,
     IgnoreVoidTargets = false,
-    RespectForceFields = true,
     PredictVelocity = false,
     MultiShot = true,
     ShotBurst = 2
@@ -1136,7 +1135,7 @@ end
 
 local function isAimAssistActive()
     return SilentAim.Enabled or state.rageMode
-}
+end
 
 -- Helper Functions
 local ignoredScriptNames = {
@@ -1169,7 +1168,7 @@ local playerModule
 local function updatePlayerModule()
     local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
     playerModule = playerScripts and playerScripts:FindFirstChild("PlayerModule") or nil
-}
+end
 
 updatePlayerModule()
 
@@ -1188,7 +1187,7 @@ local function attachPlayerScriptsListeners()
             playerModule = nil
         end
     end)
-}
+end
 
 attachPlayerScriptsListeners()
 
