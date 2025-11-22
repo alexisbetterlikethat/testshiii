@@ -2581,9 +2581,9 @@ CombatMainSection:CreateToggle({
     Callback = function(value)
         state.rageMode = value
         if value then
-            startRageMode()
+            RageSystem.startRageMode()
         else
-            stopRageMode()
+            RageSystem.stopRageMode()
         end
         queueConfigSave()
     end
