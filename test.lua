@@ -2621,7 +2621,7 @@ CombatMainSection:CreateToggle({
 local GunModsSection = CombatTab:CreateSection("Gun Mods (Arsenal)")
 
 GunModsSection:CreateToggle({
-    Name = "Rapid Fire",
+    Name = "Rapid Fire (Thunder)",
     CurrentValue = false,
     Callback = function(value)
         state.rapidFire = value
@@ -2629,65 +2629,25 @@ GunModsSection:CreateToggle({
             task.spawn(function()
                 while state.rapidFire do
                     local tool = Character and Character:FindFirstChildOfClass("Tool")
-                    if tool and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-                        pcall(function()
-                            if tool:FindFirstChild("Fire") then tool.Fire:FireServer() end
-                            if tool:FindFirstChild("Shoot") then tool.Shoot:FireServer() end
-                            if tool:FindFirstChild("Events") and tool.Events:FindFirstChild("Fire") then
-                                tool.Events.Fire:FireServer()
-                            end
-                        end)
-                    end
-                    task.wait(0.01) -- Very fast fire rate
-                end
-            end)
-        end
-    end
-})
-
-GunModsSection:CreateToggle({
-    Name = "No Spread",
-    CurrentValue = false,
-    Callback = function(value)
-        state.noSpread = value
-        if value then
-            -- Hooking namecall for No Spread
-            local mt = getrawmetatable(game)
-            local oldNamecall = mt.__namecall
-            setreadonly(mt, false)
-            
-            mt.__namecall = newcclosure(function(self, ...)
-                local method = getnamecallmethod()
-                local args = {...}
-                
-                if state.noSpread and (method == "FireServer" or method == "InvokeServer") then
-                    if self.Name == "Fire" or self.Name == "Shoot" or self.Name == "Hit" then
-                        -- Arsenal usually passes direction/position in args
-                        -- This is a generic "force center" approach
-                        if Camera then
-                            -- Look for Vector3 args that might be direction
-                            for i, v in ipairs(args) do
-                                if typeof(v) == "Vector3" then
-                                    -- If it looks like a direction (unit vectorish) or position
-                                    -- Force it to look vector
-                                    args[i] = Camera.CFrame.LookVector * 1000 -- Or just LookVector
+                    if tool then
+                        -- Value Spoofing (FireRate, Cooldown)
+                        for _, v in pairs(tool:GetDescendants()) do
+                            if v:IsA("NumberValue") or v:IsA("IntValue") then
+                                if v.Name == "FireRate" or v.Name == "Cooldown" or v.Name == "ReloadTime" then
+                                    v.Value = 0.05 -- Super fast
                                 end
                             end
                         end
-                        return oldNamecall(self, unpack(args))
                     end
+                    task.wait(0.5)
                 end
-                
-                return oldNamecall(self, ...)
             end)
-            
-            setreadonly(mt, true)
         end
     end
 })
 
 GunModsSection:CreateToggle({
-    Name = "Infinite Ammo",
+    Name = "Infinite Ammo (Thunder)",
     CurrentValue = false,
     Callback = function(value)
         state.infAmmo = value
@@ -2696,12 +2656,78 @@ GunModsSection:CreateToggle({
                 while state.infAmmo do
                     local tool = Character and Character:FindFirstChildOfClass("Tool")
                     if tool then
-                        -- Client-side ammo refill attempt
-                        if tool:FindFirstChild("Ammo") then tool.Ammo.Value = 999 end
-                        if tool:FindFirstChild("MaxAmmo") then tool.MaxAmmo.Value = 999 end
-                        -- Some Arsenal scripts use a module, this is a basic value attempt
+                        -- Value Spoofing
+                        local ammo = tool:FindFirstChild("Ammo")
+                        if ammo and ammo:IsA("ValueBase") then ammo.Value = 999 end
+                        
+                        local maxAmmo = tool:FindFirstChild("MaxAmmo")
+                        if maxAmmo and maxAmmo:IsA("ValueBase") then maxAmmo.Value = 999 end
+                        
+                        local clip = tool:FindFirstChild("ClipSize")
+                        if clip and clip:IsA("ValueBase") then clip.Value = 999 end
                     end
-                    task.wait(1)
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end
+})
+
+GunModsSection:CreateToggle({
+    Name = "No Recoil (Camera)",
+    CurrentValue = false,
+    Callback = function(value)
+        state.noRecoil = value
+        if value then
+            -- Camera Hook to prevent recoil
+            -- Simple implementation: Force camera to stay steady or reduce shake
+            -- Since we can't easily hook CFrame property set, we'll try to fight it
+            local runService = game:GetService("RunService")
+            local lastCF = Camera.CFrame
+            
+            -- Better approach: Hook the recoil function if possible, but for universal/Arsenal:
+            -- We will rely on the No Spread hook to ensure accuracy, 
+            -- and this toggle will just try to stabilize camera if possible.
+            -- Arsenal's recoil is often a spring module.
+            
+            -- Attempt to find and disable recoil values in tool
+             task.spawn(function()
+                while state.noRecoil do
+                    local tool = Character and Character:FindFirstChildOfClass("Tool")
+                    if tool then
+                         for _, v in pairs(tool:GetDescendants()) do
+                            if v:IsA("NumberValue") and (v.Name == "Recoil" or v.Name == "Spread") then
+                                v.Value = 0
+                            end
+                        end
+                    end
+                    task.wait(0.5)
+                end
+            end)
+        end
+    end
+})
+
+GunModsSection:CreateToggle({
+    Name = "Auto Gun (Randomizer)",
+    CurrentValue = false,
+    Callback = function(value)
+        state.autoGun = value
+        if value then
+            task.spawn(function()
+                while state.autoGun do
+                    pcall(function()
+                        -- Try standard Arsenal remote for next gun
+                        local rs = game:GetService("ReplicatedStorage")
+                        if rs:FindFirstChild("Remotes") and rs.Remotes:FindFirstChild("NextGun") then
+                            rs.Remotes.NextGun:FireServer()
+                        end
+                        -- Try Event
+                        if rs:FindFirstChild("Events") and rs.Events:FindFirstChild("NextGun") then
+                            rs.Events.NextGun:FireServer()
+                        end
+                    end)
+                    task.wait(0.5)
                 end
             end)
         end
