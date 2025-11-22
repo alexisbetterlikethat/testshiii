@@ -461,28 +461,38 @@ end)
 
 
 -- // 5. MAIN DESYNC LOOP //
+local savedCFrame = CFrame.new()
 local savedVelocity = Vector3.new(0,0,0)
 
--- 1. Heartbeat: Runs AFTER physics. We set the massive velocity here so it gets replicated to the server.
-RunService.Heartbeat:Connect(function()
+-- 1. RenderStepped: Run BEFORE physics. Reset to real position so we can move and see normally.
+RunService.RenderStepped:Connect(function()
     if not CONFIG.desyncEnabled then return end
     
     local char = player.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
-    -- Save the real velocity to restore it later
-    savedVelocity = hrp.AssemblyLinearVelocity
+    -- Restore real state for the client's frame
+    hrp.CFrame = savedCFrame
+    hrp.AssemblyLinearVelocity = savedVelocity
     
-    -- Set massive velocity to confuse server prediction
-    -- The server sees this and predicts we are moving extremely fast
-    hrp.AssemblyLinearVelocity = Vector3.new(20000, 5000, 20000)
+    -- Anti-Fling: Disable collisions on HRP to prevent launching others
+    hrp.CanCollide = false
     
-    -- Also mess with CFrame slightly to force replication updates
-    hrp.CFrame = hrp.CFrame * CFrame.Angles(0, 0.0001, 0)
+    -- Visuals
+    CONFIG.realPosition = savedCFrame.Position
+    CONFIG.fakePosition = savedCFrame.Position + CONFIG.desyncOffset
+    
+    if CONFIG.visualIndicator then
+        CONFIG.visualIndicator.Position = CONFIG.fakePosition
+    end
+    
+    local realStr = string.format("(%.1f, %.1f, %.1f)", CONFIG.realPosition.X, CONFIG.realPosition.Y, CONFIG.realPosition.Z)
+    local fakeStr = string.format("(%.1f, %.1f, %.1f)", CONFIG.fakePosition.X, CONFIG.fakePosition.Y, CONFIG.fakePosition.Z)
+    guiElements.posLabel.Text = "Real: " .. realStr .. "\nFake: " .. fakeStr
 end)
 
--- 2. Stepped (PreSimulation): Runs BEFORE physics. We restore the real velocity here so the client doesn't fling.
+-- 2. Stepped: Run BEFORE physics simulation. Ensure we are at the real position for physics calculations.
 RunService.Stepped:Connect(function()
     if not CONFIG.desyncEnabled then return end
     
@@ -490,34 +500,38 @@ RunService.Stepped:Connect(function()
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
-    -- Restore real velocity so local physics simulation remains normal
+    hrp.CFrame = savedCFrame
     hrp.AssemblyLinearVelocity = savedVelocity
+    hrp.CanCollide = false
 end)
 
--- 3. RenderStepped: Visuals only.
-RunService.RenderStepped:Connect(function()
+-- 3. Heartbeat: Run AFTER physics. Teleport to fake position and apply velocity for server replication.
+RunService.Heartbeat:Connect(function()
+    if not CONFIG.desyncEnabled then 
+        -- Keep saving state even when disabled so we don't snap when enabling
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then savedCFrame = hrp.CFrame end
+        return 
+    end
+    
     local char = player.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not char or not hrp then return end
+    if not hrp then return end
     
-    CONFIG.realPosition = hrp.Position
+    -- Capture the new position calculated by physics this frame
+    savedCFrame = hrp.CFrame
+    savedVelocity = hrp.AssemblyLinearVelocity
     
-    if CONFIG.desyncEnabled then
-        -- Update fake position with offset for visualization
-        -- Note: With velocity desync, the server sees you "far away" or "lagging behind".
-        -- The visualizer shows where the "Ghost" would be based on your offset setting.
-        CONFIG.fakePosition = CONFIG.realPosition + CONFIG.desyncOffset
-        
-        -- Update visual indicator
-        if CONFIG.visualIndicator then
-            CONFIG.visualIndicator.Position = CONFIG.fakePosition + Vector3.new(0, 1.5, 0)
-        end
-        
-        -- Update position display
-        local realStr = string.format("(%.1f, %.1f, %.1f)", CONFIG.realPosition.X, CONFIG.realPosition.Y, CONFIG.realPosition.Z)
-        local fakeStr = string.format("(%.1f, %.1f, %.1f)", CONFIG.fakePosition.X, CONFIG.fakePosition.Y, CONFIG.fakePosition.Z)
-        guiElements.posLabel.Text = "Real: " .. realStr .. "\nFake: " .. fakeStr
-    end
+    -- Move to fake position (The "Ball" location)
+    hrp.CFrame = savedCFrame + CONFIG.desyncOffset
+    
+    -- Apply massive velocity to break server interpolation
+    -- Zero out Y to prevent jumping/ground flings
+    hrp.AssemblyLinearVelocity = Vector3.new(20000, 0, 20000)
+    
+    -- Randomize rotation slightly to further confuse prediction
+    hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(math.random(-180, 180)), 0)
 end)
 
 
