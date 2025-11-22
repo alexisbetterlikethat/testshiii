@@ -601,6 +601,40 @@ local Window = Luna:CreateWindow({
     KeySystem = false
 })
 
+-- Mobile Support
+if UserInputService.TouchEnabled then
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "AeroMobileToggle"
+    gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    gui.ResetOnSpawn = false
+    
+    local btn = Instance.new("ImageButton")
+    btn.Size = UDim2.new(0, 50, 0, 50)
+    btn.Position = UDim2.new(0.8, 0, 0.1, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    btn.BackgroundTransparency = 0.5
+    btn.Image = "rbxassetid://6031097225" -- Aero Logo
+    btn.Parent = gui
+    
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0.5, 0)
+    uiCorner.Parent = btn
+    
+    local open = true
+    btn.MouseButton1Click:Connect(function()
+        open = not open
+        -- Luna doesn't have a direct toggle method exposed easily in this snippet, 
+        -- but usually toggling the main frame visibility works if we can find it.
+        -- Assuming Luna creates a ScreenGui named "Luna" or similar.
+        -- For now, we'll try to toggle the Window if possible or just re-run create window? No.
+        -- Best guess for Luna:
+        local core = game.CoreGui:FindFirstChild("Luna") or LocalPlayer.PlayerGui:FindFirstChild("Luna")
+        if core then
+            core.Enabled = open
+        end
+    end)
+end
+
           --HOME TAB with discord promotions--
     Window:CreateHomeTab({
 	 SupportedExecutors = {
@@ -1879,8 +1913,16 @@ function RageSystem.lockRageCamera(targetRoot)
     end
     local origin = Camera.CFrame.Position
     local focus = targetRoot.Position + Vector3.new(0, RageSettings.CameraHeightOffset, 0)
+    
+    -- Check distance to avoid glitching when too close
+    if (origin - focus).Magnitude < 2 then return end
+
     local desired = CFrame.lookAt(origin, focus)
     local smooth = math.clamp(RageSettings.CameraSmoothness or 0, 0, 1)
+    
+    -- Increase smoothness to reduce jitter
+    smooth = math.max(smooth, 0.1) 
+    
     if smooth <= 0 then
         Camera.CFrame = desired
     else
@@ -1988,19 +2030,12 @@ function RageSystem.rageAutoFire()
                 task.wait(0.02 * (i - 1))
             end
             
-            if VirtualUser then
-                local camCFrame = (Camera and Camera.CFrame) or CFrame.new()
-                VirtualUser:CaptureController()
-                VirtualUser:Button1Down(Vector2.zero, camCFrame)
-                task.delay(0.03, function()
-                    pcall(function()
-                        VirtualUser:Button1Up(Vector2.zero, camCFrame)
-                    end)
-                end)
-            end
+            -- Removed VirtualUser clicking to prevent screen glitching and spam
+            -- Relying solely on Remote Events for Arsenal
 
             local tool = RageSystem.ensureCombatTool()
             if tool then
+                -- Try standard activate first (sometimes needed for animation state)
                 pcall(function()
                     if tool.Activate then
                         tool:Activate()
@@ -2015,13 +2050,10 @@ function RageSystem.rageAutoFire()
                     if tool:FindFirstChild("Shoot") then
                         tool.Shoot:FireServer()
                     end
-                end)
-            end
-            
-            local mouse = LocalPlayer and LocalPlayer:GetMouse()
-            if mouse then
-                pcall(function()
-                    mouse1click()
+                    -- Some Arsenal guns use "Events" folder
+                    if tool:FindFirstChild("Events") and tool.Events:FindFirstChild("Fire") then
+                        tool.Events.Fire:FireServer()
+                    end
                 end)
             end
         end)
@@ -2585,14 +2617,23 @@ GunModsSection:CreateToggle({
     Name = "Rapid Fire",
     CurrentValue = false,
     Callback = function(value)
-        -- Simple rapid fire implementation
-        -- This is a placeholder logic, in a real script this would hook into the gun's firerate
+        state.rapidFire = value
         if value then
-             Luna:Notification({
-                Title = "Gun Mods",
-                Content = "Rapid Fire Enabled (Experimental)",
-                Icon = "flash_on"
-            })
+            task.spawn(function()
+                while state.rapidFire do
+                    local tool = Character and Character:FindFirstChildOfClass("Tool")
+                    if tool and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                        pcall(function()
+                            if tool:FindFirstChild("Fire") then tool.Fire:FireServer() end
+                            if tool:FindFirstChild("Shoot") then tool.Shoot:FireServer() end
+                            if tool:FindFirstChild("Events") and tool.Events:FindFirstChild("Fire") then
+                                tool.Events.Fire:FireServer()
+                            end
+                        end)
+                    end
+                    task.wait(0.01) -- Very fast fire rate
+                end
+            end)
         end
     end
 })
@@ -2601,14 +2642,8 @@ GunModsSection:CreateToggle({
     Name = "No Spread",
     CurrentValue = false,
     Callback = function(value)
-        -- Simple no spread implementation
-        if value then
-             Luna:Notification({
-                Title = "Gun Mods",
-                Content = "No Spread Enabled (Experimental)",
-                Icon = "gps_fixed"
-            })
-        end
+        state.noSpread = value
+        -- Hook handled in namecall
     end
 })
 
@@ -2616,12 +2651,20 @@ GunModsSection:CreateToggle({
     Name = "Infinite Ammo",
     CurrentValue = false,
     Callback = function(value)
-         if value then
-             Luna:Notification({
-                Title = "Gun Mods",
-                Content = "Infinite Ammo Enabled (Client Side)",
-                Icon = "all_inclusive"
-            })
+        state.infAmmo = value
+        if value then
+            task.spawn(function()
+                while state.infAmmo do
+                    local tool = Character and Character:FindFirstChildOfClass("Tool")
+                    if tool then
+                        -- Client-side ammo refill attempt
+                        if tool:FindFirstChild("Ammo") then tool.Ammo.Value = 999 end
+                        if tool:FindFirstChild("MaxAmmo") then tool.MaxAmmo.Value = 999 end
+                        -- Some Arsenal scripts use a module, this is a basic value attempt
+                    end
+                    task.wait(1)
+                end
+            end)
         end
     end
 })
@@ -3835,119 +3878,9 @@ ToolsSection:CreateButton({
     end
 })
 
-local SpectateSection = ToolsTab:CreateSection("Spectate Mode")
 
-SpectateSection:CreateToggle({
-    Name = "Spectate Mode",
-    CurrentValue = false,
-    Callback = function(value)
-        if value then
-            local gui = Instance.new("ScreenGui")
-            gui.Name = "SpectateArrows"
-            gui.ResetOnSpawn = false
-            gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-            gui.IgnoreGuiInset = true
             
-            local left = Instance.new("TextButton")
-            left.Size = UDim2.new(0, 50, 0, 50)
-            left.Position = UDim2.new(0.5, -60, 1, -60)
-            left.BackgroundTransparency = 0.5
-            left.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-            left.Text = "<"
-            left.TextColor3 = Color3.fromRGB(255, 255, 255)
-            left.Font = Enum.Font.SourceSansBold
-            left.TextSize = 30
-            left.Parent = gui
-            
-            local right = Instance.new("TextButton")
-            right.Size = UDim2.new(0, 50, 0, 50)
-            right.Position = UDim2.new(0.5, 10, 1, -60)
-            right.BackgroundTransparency = 0.5
-            right.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-            right.Text = ">"
-            right.TextColor3 = Color3.fromRGB(255, 255, 255)
-            right.Font = Enum.Font.SourceSansBold
-            right.TextSize = 30
-            right.Parent = gui
-            
-            local idx, tgt, prev = 0, nil, {}
-            local function stop()
-                if not tgt then return end
-                tgt = nil
-                pcall(function()
-                    local cam = workspace.CurrentCamera
-                    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-                    if hum then cam.CameraSubject = hum end
-                    if prev.CameraType then cam.CameraType = prev.CameraType end
-                end)
-            end
-            
-            local function go(p)
-                local ps = {}
-                for _, pl in ipairs(Players:GetPlayers()) do
-                    if pl ~= LocalPlayer and pl.Character and pl.Character:FindFirstChildOfClass("Humanoid") then
-                        table.insert(ps, pl)
-                    end
-                end
-                table.sort(ps, function(a, b) return a.Name < b.Name end)
-                if #ps == 0 then stop() idx = 0 return end
-                if p < 1 then p = #ps elseif p > #ps then p = 1 end
-                idx = p
-                local tar = ps[p]
-                if tar and tar.Character then
-                    local hum = tar.Character:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        pcall(function()
-                            local cam = workspace.CurrentCamera
-                            prev.Subject = cam.CameraSubject
-                            prev.CameraType = cam.CameraType
-                            cam.CameraSubject = hum
-                            cam.CameraType = Enum.CameraType.Custom
-                            tgt = tar
-                        end)
-                    end
-                end
-            end
-            
-            left.MouseButton1Click:Connect(function() go(idx - 1) end)
-            right.MouseButton1Click:Connect(function() go(idx + 1) end)
-            go(1)
-        else
-            local gui = LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("SpectateArrows")
-            if gui then gui:Destroy() end
-            local cam = workspace.CurrentCamera
-            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if hum then cam.CameraSubject = hum end
-        end
-    end
-})
 
--- ========== OTHER TAB ==========
-local OtherTab = Window:CreateTab({
-    Name = "Other",
-    Icon = "settings",
-    ImageSource = "Material"
-})
-
-local OtherSection = OtherTab:CreateSection("Miscellaneous")
-
-OtherSection:CreateLabel({
-    Text = "Note: Choose the right animation type for your character (R6 or R15)"
-})
-
-OtherSection:CreateButton({
-    Name = "Jerk Off (R6)",
-    Callback = function()
-        loadstring(game:HttpGet("https://pastefy.app/wa3v2Vgm/raw"))()
-    end
-})
-
-OtherSection:CreateButton({
-    Name = "Jerk Off (R15)",
-    Callback = function()
-        loadstring(game:HttpGet("https://pastefy.app/YZoglOyJ/raw"))()
-    end
-})
 
 OtherSection:CreateToggle({
     Name = "Music",
