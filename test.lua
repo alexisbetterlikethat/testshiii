@@ -213,18 +213,9 @@ end
 
 CONFIG.visualIndicator = createVisualIndicator()
 
--- Apply FastFlags if supported
-pcall(function()
-    if setfflag then
-        setfflag("DFFlagPlayerHumanoidPropertyUpdateRestrict", "False")
-        setfflag("DFIntDebugDefaultTargetWorldStepsPerFrame", "-2147483648")
-        setfflag("DFIntMaxMissedWorldStepsRemembered", "-2147483648")
-        setfflag("DFIntWorldStepsOffsetAdjustRate", "2147483648")
-        setfflag("DFIntDebugSendDistInSteps", "-2147483648")
-        setfflag("DFIntWorldStepMax", "-2147483648")
-        setfflag("DFIntWarpFactor", "2147483648")
-    end
-end)
+-- FastFlags removed as they are patched
+-- Using Velocity manipulation method instead
+
 
 
 -- // 4. GUI SETUP //
@@ -470,6 +461,40 @@ end)
 
 
 -- // 5. MAIN DESYNC LOOP //
+local savedVelocity = Vector3.new(0,0,0)
+
+-- 1. Heartbeat: Runs AFTER physics. We set the massive velocity here so it gets replicated to the server.
+RunService.Heartbeat:Connect(function()
+    if not CONFIG.desyncEnabled then return end
+    
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    -- Save the real velocity to restore it later
+    savedVelocity = hrp.AssemblyLinearVelocity
+    
+    -- Set massive velocity to confuse server prediction
+    -- The server sees this and predicts we are moving extremely fast
+    hrp.AssemblyLinearVelocity = Vector3.new(20000, 5000, 20000)
+    
+    -- Also mess with CFrame slightly to force replication updates
+    hrp.CFrame = hrp.CFrame * CFrame.Angles(0, 0.0001, 0)
+end)
+
+-- 2. Stepped (PreSimulation): Runs BEFORE physics. We restore the real velocity here so the client doesn't fling.
+RunService.Stepped:Connect(function()
+    if not CONFIG.desyncEnabled then return end
+    
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    -- Restore real velocity so local physics simulation remains normal
+    hrp.AssemblyLinearVelocity = savedVelocity
+end)
+
+-- 3. RenderStepped: Visuals only.
 RunService.RenderStepped:Connect(function()
     local char = player.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -478,7 +503,9 @@ RunService.RenderStepped:Connect(function()
     CONFIG.realPosition = hrp.Position
     
     if CONFIG.desyncEnabled then
-        -- Update fake position with offset
+        -- Update fake position with offset for visualization
+        -- Note: With velocity desync, the server sees you "far away" or "lagging behind".
+        -- The visualizer shows where the "Ghost" would be based on your offset setting.
         CONFIG.fakePosition = CONFIG.realPosition + CONFIG.desyncOffset
         
         -- Update visual indicator
