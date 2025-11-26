@@ -36,6 +36,31 @@ local playerGui = player:WaitForChild("PlayerGui")
 local camera = Workspace.CurrentCamera
 local http = game:GetService("HttpService") -- Defined here for the webhook
 
+-- ==========================================
+-- DEBUGGING SYSTEM
+-- ==========================================
+local function debugLog(message, level)
+    level = level or "INFO"
+    local prefix = "[AeroHub] [" .. level .. "] "
+    local fullMessage = prefix .. tostring(message)
+    
+    -- Standard Roblox Output
+    if level == "ERROR" then
+        warn(fullMessage)
+    else
+        print(fullMessage)
+    end
+    
+    -- External Console Support (if available)
+    if rconsoleprint then
+        pcall(function()
+            rconsoleprint(fullMessage .. "\n")
+        end)
+    end
+end
+
+debugLog("Script started. Polyfills applied: " .. (task and "Yes" or "No"), "INFO")
+
 -- ========================================== 
 -- ILLUSION VARIABLES
 -- ========================================== 
@@ -44,12 +69,35 @@ local Humanoid = nil
 local RootPart = nil
 local IsEffectActive = false
 local DesyncHeartbeat = nil
-local LocalClone = nil 
+local LocalClone = nil
+local Clone = nil -- The actual clone of the character
+local WalkTrack = nil -- AnimationTrack for the clone's walking
+local LocalDesyncPos = nil -- Stores the last known desync position
 
+-- Helper to safely initialize Character variables
 local function initializeCharacter(newChar)
+    debugLog("Initializing character: " .. tostring(newChar), "INFO")
     Character = newChar
-    Humanoid = newChar:WaitForChild("Humanoid", 5)
+    Humanoid = newChar:WaitForChild("Humanoid", 5) 
     RootPart = newChar:WaitForChild("HumanoidRootPart", 5)
+    
+    if not Humanoid or not RootPart then
+        debugLog("Failed to find Humanoid or RootPart", "ERROR")
+        return
+    end
+
+    -- Clean up any previous effect when character is initialized
+    if IsEffectActive then
+        debugLog("Cleaning up previous effect during init", "INFO")
+        local oldEffectState = IsEffectActive
+        pcall(stopIllusion) 
+        -- If Desync was on, restart it immediately for the new character
+        if oldEffectState and getgenv and getgenv().DesyncEnabled then
+            debugLog("Restarting Desync for new character", "INFO")
+            task.wait(0.2) -- Small wait for character setup
+            pcall(startIllusion)
+        end
+    end
 end
 
 local function createLocalClone()
@@ -82,11 +130,18 @@ end
 
 -- ========================================== 
 -- DESYNC LOGIC (UPDATED VELOCITY)
--- ========================================== 
-local function startDesync()
-    if not Character or not RootPart or IsEffectActive then return end
+-- ==========================================
+-- Sets up and starts the clone/illusion
+local function startIllusion()
+    debugLog("Attempting to start illusion...", "INFO")
+    if not Character or not RootPart or IsEffectActive then 
+        debugLog("Cannot start illusion: Char="..tostring(Character).." Root="..tostring(RootPart).." Active="..tostring(IsEffectActive), "WARN")
+        return 
+    end
+
     IsEffectActive = true
-    
+    debugLog("Illusion active set to true", "INFO")
+
     -- 1. Create Visual Clone
     if LocalClone then LocalClone:Destroy() end
     LocalClone = createLocalClone()
@@ -119,8 +174,13 @@ local function startDesync()
     })
 end
 
-local function stopDesync()
-    if not IsEffectActive then return end
+-- Cleans up the illusion and restores the player's visibility
+local function stopIllusion()
+    debugLog("Stopping illusion...", "INFO")
+    if not IsEffectActive then 
+        debugLog("Illusion already stopped", "INFO")
+        return 
+    end
     IsEffectActive = false
     
     if DesyncHeartbeat then
@@ -145,11 +205,17 @@ end
 
 local function handleCharacter(newChar)
     if IsEffectActive then
-        stopDesync()
+        stopIllusion()
     end
     task.wait(0.1)
     initializeCharacter(newChar)
+    
+    -- If Desync is currently toggled ON (for respawns), immediately restart the effect
+    if getgenv and getgenv().DesyncEnabled then
+        pcall(startIllusion)
+    end
 end
+
 
 player.CharacterAdded:Connect(handleCharacter)
 if player.Character then
@@ -426,15 +492,44 @@ table.insert(contentElements, noteLabel)
 local isOn = false
 local isAnimating = false
 
+local function clearUnwantedScripts(char)
+    for _, script in ipairs(char:GetDescendants()) do
+        if script:IsA("Script") or script:IsA("LocalScript") then
+            script:Destroy()
+        end
+    end
+end
+
 local function toggle()
     if isAnimating or not canDrag then return end
     isAnimating = true
     isOn = not isOn
     
-    if isOn then
-        pcall(startDesync)
+    -- UPDATE DESYNC STATE AND CLONE ILLUSION
+    if isOn and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local pos = player.Character.HumanoidRootPart.Position
+        LocalDesyncPos = pos
+        debugLog("Desync Toggled ON. Position: " .. tostring(pos), "INFO")
+        clearUnwantedScripts(player.Character)
+        
+        if getgenv then
+            getgenv().DesyncEnabled = true
+            getgenv().DesyncPosition = pos
+        end
+        
+        -- >>> START CLONE ILLUSION
+        local success, err = pcall(startIllusion) 
+        if not success then debugLog("Error starting illusion: " .. tostring(err), "ERROR") end
+        
     else
-        pcall(stopDesync)
+        LocalDesyncPos = nil
+        debugLog("Desync Toggled OFF", "INFO")
+        
+        if getgenv then
+            getgenv().DesyncEnabled = false
+            getgenv().DesyncPosition = nil
+            pcall(stopIllusion) 
+        end
     end
     
     local targetPos = isOn and UDim2.new(1, -60, 0, 2) or UDim2.new(0, 4, 0, 2)
