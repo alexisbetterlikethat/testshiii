@@ -222,6 +222,17 @@ if player.Character then
     handleCharacter(player.Character)
 end
 
+-- ==========================================
+-- ANTI-AFK (Anti-Kick)
+-- ==========================================
+local VirtualUser = game:GetService("VirtualUser")
+player.Idled:Connect(function()
+    debugLog("Anti-AFK: Simulating input to prevent kick", "INFO")
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+end)
+debugLog("Anti-AFK Enabled", "INFO")
+
 -- ========================================== 
 -- GUI HELPER FUNCTIONS
 -- ========================================== 
@@ -457,8 +468,7 @@ local visKnob = new("Frame", {
     Parent=visToggleFrame,
     ZIndex=61
 })
-new("UICorner", {CornerRadius=UDim.new(1,0)}, visKnob)
-
+new("UICorner", {CornerRadius=UDim.new(1,0)}, visKnob) -- Vis Symbol
 local visSymbol = new("TextLabel", {
     Text="X",
     Font=Enum.Font.GothamBlack,
@@ -474,6 +484,25 @@ local visSymbol = new("TextLabel", {
 })
 addHoverEffect(visSymbol)
 
+-- 3. LAG SWITCH SECTION
+-- Label
+local lagLabel = new("TextLabel",{ Text="Lag Switch (Freeze)", Font=Enum.Font.GothamBold, TextSize=24, TextColor3=Color3.fromRGB(255,100,100), BackgroundTransparency=1, Size=UDim2.new(1,0,0,30), Position=UDim2.new(0,0,0.68,0), TextScaled=false, Parent=panel, ZIndex=60 })
+addHoverEffect(lagLabel)
+table.insert(contentElements, lagLabel)
+
+-- Lag Toggle Frame
+local lagToggleFrame = new("Frame",{ Size=UDim2.new(0,100,0,50), BackgroundColor3=Color3.fromRGB(40,40,60), Position=UDim2.new(0.5,-50,0.78,0), Parent=panel, ZIndex=60 })
+new("UICorner",{CornerRadius=UDim.new(0,25)}, lagToggleFrame)
+table.insert(contentElements, lagToggleFrame)
+
+-- Lag Knob
+local lagKnob = new("Frame",{ Size=UDim2.new(0,46,0,46), Position=UDim2.new(0,2,0,2), BackgroundColor3=Color3.fromRGB(255,255,255), Parent=lagToggleFrame, ZIndex=61 })
+new("UICorner",{CornerRadius=UDim.new(1,0)}, lagKnob)
+
+-- Lag Symbol
+local lagSymbol = new("TextLabel",{ Text="X", Font=Enum.Font.GothamBlack, TextSize=24, TextColor3=Color3.fromRGB(255,50,50), BackgroundTransparency=1, AnchorPoint=Vector2.new(0.5, 0.5), Position=UDim2.new(0.5, 0, 0.5, 0), Size=UDim2.new(1,0,1,0), Rotation=0, Parent=lagKnob, ZIndex=62 })
+addHoverEffect(lagSymbol)
+
 local noteLabel = new("TextLabel", {
     Text="Server sees your 'Clone' (Blue Ghost)\nYou move freely.",
     Font=Enum.Font.Gotham,
@@ -481,7 +510,7 @@ local noteLabel = new("TextLabel", {
     TextColor3=Color3.fromRGB(150, 150, 160),
     BackgroundTransparency=1,
     Size=UDim2.new(0, 400, 0, 20),
-    Position=UDim2.new(0.5, 0, 0.8, 0),
+    Position=UDim2.new(0.5, 0, 0.92, 0), -- Moved down
     AnchorPoint=Vector2.new(0.5, 0),
     Parent=panel,
     ZIndex=60
@@ -642,6 +671,50 @@ end
 visToggleFrame.InputBegan:Connect(connectVisToggle)
 visKnob.InputBegan:Connect(connectVisToggle)
 visSymbol.InputBegan:Connect(connectVisToggle)
+
+-- LAG SWITCH LOGIC
+local isLagOn = false
+local isLagAnimating = false
+
+local function toggleLag()
+    if isLagAnimating or not canDrag then return end
+    isLagAnimating = true
+    isLagOn = not isLagOn
+    
+    debugLog("Lag Switch Toggled: " .. tostring(isLagOn), "INFO")
+    
+    if isLagOn then
+        -- Enable Lag (Freeze)
+        if settings() and settings().Network then
+            settings().Network.IncomingReplicationLag = 10000 -- High lag
+        end
+    else
+        -- Disable Lag (Unfreeze)
+        if settings() and settings().Network then
+            settings().Network.IncomingReplicationLag = 0
+        end
+    end
+    
+    local targetPos = isLagOn and UDim2.new(1, -48, 0, 2) or UDim2.new(0, 2, 0, 2)
+    TweenService:Create(lagKnob, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position=targetPos}):Play()
+    local targetColor = isLagOn and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(40, 40, 60)
+    TweenService:Create(lagToggleFrame, TweenInfo.new(0.4), {BackgroundColor3=targetColor}):Play()
+    local spinTween = TweenService:Create(lagSymbol, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Rotation = lagSymbol.Rotation + 360})
+    spinTween:Play()
+    task.delay(0.2, function()
+        lagSymbol.Text = isLagOn and "✔️" or "X"
+        lagSymbol.TextColor3 = isLagOn and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(255, 50, 50)
+    end)
+    spinTween.Completed:Wait()
+    isLagAnimating = false
+end
+local function connectLagToggle(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then toggleLag() end
+end
+lagToggleFrame.InputBegan:Connect(connectLagToggle)
+lagKnob.InputBegan:Connect(connectLagToggle)
+lagSymbol.InputBegan:Connect(connectLagToggle)
+
 
 -- TOP BAR BUTTONS
 local topBar = new("Frame", {
@@ -827,8 +900,8 @@ task.spawn(function()
         if element:IsA("TextLabel") or element:IsA("TextButton") then
             TweenService:Create(element, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
         end
-        if element == toggleFrame or element == visToggleFrame or element == minBtn or element == closeBtn then
-            TweenService:Create(element, TweenInfo.new(0.5), {BackgroundTransparency = 0}):Play()
+        if element == toggleFrame or element == visToggleFrame or element == lagToggleFrame or element == minBtn or element == closeBtn then 
+            TweenService:Create(element, TweenInfo.new(0.5), {BackgroundTransparency = 0}):Play() 
         end
         task.wait(0.1)
     end
