@@ -212,9 +212,7 @@ Tab:CreateButton({
         print("One Click Dump button pressed")
         Luna:Notification({
             Title = "Dumping...",
-            Content = "Analyzing game. Check workspace folder for file.",
-            Icon = "info",
-            ImageSource = "Lucide"
+            Content = "Analyzing game. Check workspace folder for file."
         })
         
         task.defer(function()
@@ -229,17 +227,13 @@ Tab:CreateButton({
                 
                 Luna:Notification({
                     Title = "Success",
-                    Content = "Saved to " .. fileName,
-                    Icon = "check",
-                    ImageSource = "Lucide"
+                    Content = "Saved to " .. fileName
                 })
             else
                 warn("Dump failed: " .. tostring(result))
                 Luna:Notification({
                     Title = "Failed",
-                    Content = "Dump failed. Check console (F9).",
-                    Icon = "x",
-                    ImageSource = "Lucide"
+                    Content = "Dump failed. Check console (F9)."
                 })
             end
         end)
