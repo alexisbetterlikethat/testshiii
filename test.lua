@@ -94,9 +94,13 @@ local function generateFullDump()
     log("\n")
 
     -- 1. NIL INSTANCES
+    print("Scanning Nil Instances...")
     log("=== NIL INSTANCES (Hidden Objects) ===")
     if getnilinstances then
-        for _, obj in ipairs(getnilinstances()) do
+        local nilInsts = getnilinstances()
+        print("Nil Instances found: " .. #nilInsts)
+        for i, obj in ipairs(nilInsts) do
+            if i % 100 == 0 then task.wait() end -- Yield every 100 items
             pcall(function()
                 log("NIL: " .. obj.ClassName .. " | Name: " .. tostring(obj.Name))
             end)
@@ -107,10 +111,16 @@ local function generateFullDump()
     log("\n")
 
     -- 1.5 GC SCAN (AGGRESSIVE)
+    print("Starting GC Scan...")
     log("=== GC SCAN (Aggressive) ===")
     log("Scanning garbage collector for interesting tables/functions...")
     local gcCount = 0
-    for _, v in ipairs(getgc(true)) do
+    local gcTable = getgc(true)
+    print("GC Objects to scan: " .. #gcTable)
+    
+    for i, v in ipairs(gcTable) do
+        if i % 2000 == 0 then task.wait() end -- Yield every 2000 items to prevent freeze
+        
         if type(v) == "table" and rawget(v, "Detected") then
             log("GC FOUND: Table with 'Detected' key")
             gcCount = gcCount + 1
