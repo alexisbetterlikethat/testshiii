@@ -26,7 +26,7 @@ local Window = Luna:CreateWindow({
 
 local Tab = Window:CreateTab({
     Name = "One Click",
-    Icon = "download",
+    Icon = "list",
     ImageSource = "Material"
 })
 
@@ -211,7 +211,8 @@ Tab:CreateButton({
         Luna:Notification({
             Title = "Dumping...",
             Content = "Analyzing game. This may freeze for a moment.",
-            Icon = "hourglass"
+            Icon = "hourglass_empty",
+            ImageSource = "Material"
         })
         
         task.defer(function()
@@ -222,16 +223,18 @@ Tab:CreateButton({
                 Luna:Notification({
                     Title = "Success",
                     Content = "Full game dump copied to clipboard!",
-                    Icon = "check"
+                    Icon = "check_circle",
+                    ImageSource = "Material"
                 })
             else
                 warn("Dump failed: " .. tostring(result))
                 Luna:Notification({
                     Title = "Failed",
                     Content = "Dump failed. Check console (F9).",
-                    Icon = "close"
+                    Icon = "cancel",
+                    ImageSource = "Material"
                 })
             end
         end)
     end
-})
+}, "OneClickDump")
