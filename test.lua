@@ -106,8 +106,12 @@ end
 
 local function createLocalClone()
     if not player.Character then return nil end
-    player.Archivable = true
+    player.Character.Archivable = true
     local clone = player.Character:Clone()
+    if not clone then
+        debugLog("Failed to clone character", "ERROR")
+        return nil
+    end
     clone.Name = "Desync_Illusion"
     clone.Parent = Workspace
     
