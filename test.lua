@@ -1,12 +1,6 @@
 --[[
-    ONE CLICK GAME DUMPER
-    Powered by Aero Hub
-    
-    Exports a comprehensive analysis of the game to clipboard.
-    - Hierarchy & Properties
-    - Script Source (Decompiled)
-    - Remotes
-    - Nil Instances
+    AERO HUB - GAME DUMPER (REWRITTEN)
+    Focus: Stability, Speed, and Utility.
 ]]
 
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/master/source.lua"))()
@@ -14,30 +8,31 @@ local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
 local Window = Luna:CreateWindow({
-    Name = "One Click Dumper",
-    Subtitle = "Ultimate Analysis Tool",
+    Name = "Aero Dumper",
+    Subtitle = "Reliable Game Analysis",
     LogoID = "6031097225",
     LoadingEnabled = false,
     ConfigSettings = {
         RootFolder = nil,
-        ConfigFolder = "OneClickDumper"
+        ConfigFolder = "AeroDumper"
     }
 })
 
 local Tab = Window:CreateTab({
-    Name = "One Click",
-    Icon = "list",
+    Name = "Dumper",
+    Icon = "save",
     ImageSource = "Material"
 })
 
--- Safe Property Getter
-local function getProp(obj, prop)
-    local success, result = pcall(function() return obj[prop] end)
-    if success then return result end
-    return nil
-end
+-- Configuration
+local Config = {
+    DumpScripts = true,
+    DumpRemotes = true,
+    DumpHierarchy = true,
+    SaveToFile = true
+}
 
--- Decompiler Wrapper
+-- Utility Functions
 local function safeDecompile(scriptObj)
     if not decompile then return "-- Decompiler not supported" end
     local success, source = pcall(decompile, scriptObj)
@@ -45,208 +40,131 @@ local function safeDecompile(scriptObj)
     return "-- Decompilation failed"
 end
 
--- Aggressive Debug Wrappers
-local getgc = getgc or function() return {} end
-local getconstants = debug.getconstants or function() return {} end
-local getupvalues = debug.getupvalues or function() return {} end
-local getprotos = debug.getprotos or function() return {} end
-local getinfo = debug.getinfo or function() return {} end
-
-local function dumpScriptDeep(funcOrScript)
-    local output = {}
-    local function log(s) table.insert(output, s) end
-    
-    pcall(function()
-        -- Constants
-        local consts = getconstants(funcOrScript)
-        if #consts > 0 then
-            log("    [CONSTANTS]")
-            for i, v in ipairs(consts) do
-                if type(v) == "string" or type(v) == "number" or type(v) == "boolean" then
-                    log("      " .. i .. ": " .. tostring(v))
-                end
-            end
-        end
-        
-        -- Upvalues
-        local upvals = getupvalues(funcOrScript)
-        if #upvals > 0 then
-            log("    [UPVALUES]")
-            for i, v in ipairs(upvals) do
-                log("      " .. i .. ": " .. tostring(v))
-            end
-        end
-    end)
-    
-    return table.concat(output, "\n")
+local function getPath(obj)
+    local success, path = pcall(function() return obj:GetFullName() end)
+    if success then return path end
+    return obj.Name
 end
 
--- Dump Generator
-local function generateFullDump()
+-- Main Dumper Logic
+local function StartDump()
     local output = {}
     local function log(str) table.insert(output, str) end
     
-    log("=== ONE CLICK GAME DUMP ===")
+    log("=== AERO GAME DUMP ===")
     log("Date: " .. os.date("%Y-%m-%d %H:%M:%S"))
-    log("Game ID: " .. tostring(game.PlaceId))
-    log("Job ID: " .. tostring(game.JobId))
+    log("Place ID: " .. game.PlaceId)
+    log("Job ID: " .. game.JobId)
     log("Executor: " .. (identifyexecutor and identifyexecutor() or "Unknown"))
     log("\n")
 
-    -- 1. NIL INSTANCES
-    print("Scanning Nil Instances...")
-    log("=== NIL INSTANCES (Hidden Objects) ===")
-    if getnilinstances then
-        local nilInsts = getnilinstances()
-        print("Nil Instances found: " .. #nilInsts)
-        for i, obj in ipairs(nilInsts) do
-            if i % 100 == 0 then task.wait() end -- Yield every 100 items
-            pcall(function()
-                log("NIL: " .. obj.ClassName .. " | Name: " .. tostring(obj.Name))
-            end)
-        end
-    else
-        log("getnilinstances not supported")
-    end
-    log("\n")
-
-    -- 1.5 GC SCAN (AGGRESSIVE)
-    print("Starting GC Scan...")
-    log("=== GC SCAN (Aggressive) ===")
-    log("Scanning garbage collector for interesting tables/functions...")
-    local gcCount = 0
-    local gcTable = getgc(true)
-    print("GC Objects to scan: " .. #gcTable)
-    
-    for i, v in ipairs(gcTable) do
-        if i % 2000 == 0 then task.wait() end -- Yield every 2000 items to prevent freeze
-        
-        if type(v) == "table" and rawget(v, "Detected") then
-            log("GC FOUND: Table with 'Detected' key")
-            gcCount = gcCount + 1
-        elseif type(v) == "function" then
-            local info = getinfo(v)
-            if info.name and (info.name:lower():match("kick") or info.name:lower():match("ban")) then
-                 log("GC FOUND: Function '" .. info.name .. "'")
-                 gcCount = gcCount + 1
-            end
-        end
-    end
-    log("GC Scan complete. Found " .. gcCount .. " interesting items.")
-    log("\n")
-
-    -- 2. HIERARCHY & SCRIPTS
-    log("=== HIERARCHY & SCRIPTS ===")
-    
-    local function dumpHierarchy(parent, depth)
-        if depth > 10 then return end -- Prevent infinite recursion
-        local indent = string.rep("  ", depth)
-        
-        local children = parent:GetChildren()
-        -- Sort for consistency
-        table.sort(children, function(a, b) return a.Name < b.Name end)
-        
-        for _, child in ipairs(children) do
-            local className = child.ClassName
-            local name = child.Name
-            local extra = ""
-            
-            -- Capture specific interesting properties
-            if child:IsA("ValueBase") then
-                local val = getProp(child, "Value")
-                if val ~= nil then extra = " [Value: " .. tostring(val) .. "]" end
-            elseif child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
-                extra = " [REMOTE]"
-            elseif child:IsA("ModuleScript") or child:IsA("LocalScript") then
-                extra = " [SCRIPT]"
-            end
-            
-            log(indent .. "- " .. name .. " (" .. className .. ")" .. extra)
-            
-            -- Dump Script Source & Deep Data
-            if child:IsA("LocalScript") or child:IsA("ModuleScript") then
-                log(indent .. "  --- DEEP SCAN START ---")
-                
-                -- Aggressive: Dump Constants & Upvalues
-                local deepData = dumpScriptDeep(child)
-                if deepData ~= "" then
-                    log(deepData)
-                end
-
-                log(indent .. "  --- SOURCE START ---")
-                local src = safeDecompile(child)
-                -- Indent source for readability
-                src = src:gsub("\n", "\n" .. indent .. "  ")
-                log(indent .. "  " .. src)
-                log(indent .. "  --- SOURCE END ---")
-                log(indent .. "  --- DEEP SCAN END ---")
-            end
-            
-            dumpHierarchy(child, depth + 1)
-        end
-    end
-
-    -- Dump key services
-    local servicesToDump = {
+    -- Services to Scan
+    local services = {
         game:GetService("ReplicatedStorage"),
-        game:GetService("StarterPlayer"),
-        game:GetService("StarterPack"),
         game:GetService("StarterGui"),
+        game:GetService("StarterPack"),
+        game:GetService("StarterPlayer"),
+        game:GetService("Teams"),
+        game:GetService("SoundService"),
         game:GetService("Lighting"),
         game:GetService("ReplicatedFirst"),
-        game:GetService("Teams"),
-        game:GetService("SoundService")
+        game:GetService("Workspace") -- Included, but we will be careful
     }
 
-    for _, service in ipairs(servicesToDump) do
-        print("Dumping service: " .. service.Name)
-        log("\n[" .. service.Name .. "]")
-        dumpHierarchy(service, 1)
-        task.wait() -- Yield to prevent freeze
+    local totalItems = 0
+    local startTime = os.clock()
+
+    for _, service in ipairs(services) do
+        log("--- SERVICE: " .. service.Name .. " ---")
+        print("Dumping Service: " .. service.Name)
+        
+        -- Use GetDescendants for a flat list (easier to yield)
+        local descendants = service:GetDescendants()
+        
+        for i, obj in ipairs(descendants) do
+            if i % 500 == 0 then task.wait() end -- Yield every 500 items
+            
+            local isRemote = obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")
+            local isScript = obj:IsA("LocalScript") or obj:IsA("ModuleScript")
+            
+            if isRemote and Config.DumpRemotes then
+                log("[REMOTE] " .. getPath(obj) .. " (" .. obj.ClassName .. ")")
+            elseif isScript and Config.DumpScripts then
+                log("[SCRIPT] " .. getPath(obj) .. " (" .. obj.ClassName .. ")")
+                log("    --- SOURCE START ---")
+                local src = safeDecompile(obj)
+                log(src)
+                log("    --- SOURCE END ---")
+            elseif Config.DumpHierarchy then
+                -- Only log interesting things in hierarchy to save space/time
+                if obj:IsA("ValueBase") or obj:IsA("ScreenGui") or obj:IsA("ProximityPrompt") then
+                     log("[OBJ] " .. getPath(obj) .. " (" .. obj.ClassName .. ")")
+                end
+            end
+            
+            totalItems = totalItems + 1
+        end
+        log("\n")
+        task.wait()
     end
     
-    -- Dump LocalPlayer specifically
-    if Players.LocalPlayer then
-        print("Dumping LocalPlayer")
-        log("\n[LocalPlayer]")
-        dumpHierarchy(Players.LocalPlayer, 1)
-    end
+    local endTime = os.clock()
+    log("Dump finished in " .. string.format("%.2f", endTime - startTime) .. " seconds.")
+    log("Total items scanned: " .. totalItems)
     
-    print("Dump generation complete.")
     return table.concat(output, "\n")
 end
 
-Tab:CreateSection("Export")
+-- UI Elements
+Tab:CreateSection("Settings")
+
+Tab:CreateToggle({
+    Name = "Dump Scripts (Decompile)",
+    CurrentValue = true,
+    Callback = function(val) Config.DumpScripts = val end
+}, "DumpScripts")
+
+Tab:CreateToggle({
+    Name = "Dump Remotes",
+    CurrentValue = true,
+    Callback = function(val) Config.DumpRemotes = val end
+}, "DumpRemotes")
+
+Tab:CreateSection("Actions")
 
 Tab:CreateButton({
-    Name = "One Click Dump",
-    Description = "Exports the game dump to file",
+    Name = "START DUMP",
+    Description = "Saves dump to workspace folder",
     Callback = function()
-        print("One Click Dump button pressed")
+        print("Starting Dump Process...")
         Luna:Notification({
-            Title = "Dumping...",
-            Content = "Analyzing game. Check workspace folder for file."
+            Title = "Starting Dump",
+            Content = "Check console (F9) for progress.",
+            Icon = "info",
+            ImageSource = "Lucide"
         })
         
         task.defer(function()
-            print("Starting generation...")
-            local success, result = pcall(generateFullDump)
-            print("Generation finished. Success: " .. tostring(success))
+            local success, result = pcall(StartDump)
             
             if success then
-                print("Dump size: " .. #result)
-                local fileName = "GameDump_" .. game.PlaceId .. "_" .. os.time() .. ".txt"
+                local fileName = "AeroDump_" .. game.PlaceId .. "_" .. os.time() .. ".txt"
                 writefile(fileName, result)
+                print("Dump saved to: " .. fileName)
                 
                 Luna:Notification({
-                    Title = "Success",
-                    Content = "Saved to " .. fileName
+                    Title = "Dump Complete",
+                    Content = "Saved as " .. fileName,
+                    Icon = "check",
+                    ImageSource = "Lucide"
                 })
             else
-                warn("Dump failed: " .. tostring(result))
+                warn("Dump Error: " .. tostring(result))
                 Luna:Notification({
-                    Title = "Failed",
-                    Content = "Dump failed. Check console (F9)."
+                    Title = "Dump Failed",
+                    Content = "Error occurred. Check console.",
+                    Icon = "x",
+                    ImageSource = "Lucide"
                 })
             end
         end)
