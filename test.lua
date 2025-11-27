@@ -186,20 +186,23 @@ local function generateFullDump()
         game:GetService("ReplicatedFirst"),
         game:GetService("Teams"),
         game:GetService("SoundService")
-        -- game:GetService("Workspace") -- Removed to prevent freezing/crashing
     }
 
     for _, service in ipairs(servicesToDump) do
+        print("Dumping service: " .. service.Name)
         log("\n[" .. service.Name .. "]")
         dumpHierarchy(service, 1)
+        task.wait() -- Yield to prevent freeze
     end
     
     -- Dump LocalPlayer specifically
     if Players.LocalPlayer then
+        print("Dumping LocalPlayer")
         log("\n[LocalPlayer]")
         dumpHierarchy(Players.LocalPlayer, 1)
     end
-
+    
+    print("Dump generation complete.")
     return table.concat(output, "\n")
 end
 
