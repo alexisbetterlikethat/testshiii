@@ -185,8 +185,8 @@ local function generateFullDump()
         game:GetService("Lighting"),
         game:GetService("ReplicatedFirst"),
         game:GetService("Teams"),
-        game:GetService("SoundService"),
-        game:GetService("Workspace") -- Be careful with workspace size
+        game:GetService("SoundService")
+        -- game:GetService("Workspace") -- Removed to prevent freezing/crashing
     }
 
     for _, service in ipairs(servicesToDump) do
@@ -207,34 +207,39 @@ Tab:CreateSection("Export")
 
 Tab:CreateButton({
     Name = "One Click Dump",
-    Description = "Exports the game dump to clipboard",
+    Description = "Exports the game dump to file",
     Callback = function()
         print("One Click Dump button pressed")
         Luna:Notification({
             Title = "Dumping...",
-            Content = "Analyzing game. This may freeze for a moment.",
+            Content = "Analyzing game. Check workspace folder for file.",
             Icon = "info",
-            ImageSource = "Material"
+            ImageSource = "Lucide"
         })
         
         task.defer(function()
+            print("Starting generation...")
             local success, result = pcall(generateFullDump)
+            print("Generation finished. Success: " .. tostring(success))
             
             if success then
-                setclipboard(result)
+                print("Dump size: " .. #result)
+                local fileName = "GameDump_" .. game.PlaceId .. "_" .. os.time() .. ".txt"
+                writefile(fileName, result)
+                
                 Luna:Notification({
                     Title = "Success",
-                    Content = "Full game dump copied to clipboard!",
+                    Content = "Saved to " .. fileName,
                     Icon = "check",
-                    ImageSource = "Material"
+                    ImageSource = "Lucide"
                 })
             else
                 warn("Dump failed: " .. tostring(result))
                 Luna:Notification({
                     Title = "Failed",
                     Content = "Dump failed. Check console (F9).",
-                    Icon = "close",
-                    ImageSource = "Material"
+                    Icon = "x",
+                    ImageSource = "Lucide"
                 })
             end
         end)
