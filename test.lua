@@ -120,37 +120,45 @@ local function toTarget(targetPos)
     return Tween
 end
 
--- Fast Attack Logic
-local CombatFramework = require(LocalPlayer.PlayerScripts:WaitForChild("CombatFramework"))
-local CombatFrameworkR = getupvalues(CombatFramework)[2]
+-- Fast Attack Logic (with error handling)
+local CombatFramework, CombatFrameworkR
+pcall(function()
+    CombatFramework = require(LocalPlayer.PlayerScripts:WaitForChild("CombatFramework", 10))
+    CombatFrameworkR = getupvalues(CombatFramework)[2]
+end)
 
 local function CurrentWeapon()
-	local ac = CombatFrameworkR.activeController
-	local ret = ac.blades[1]
-	if not ret then return game.Players.LocalPlayer.Character:FindFirstChildOfClass("Tool").Name end
-	pcall(function()
-		while ret.Parent~=game.Players.LocalPlayer.Character do ret=ret.Parent end
-	end)
-	if not ret then return game.Players.LocalPlayer.Character:FindFirstChildOfClass("Tool").Name end
-	return ret
+    if not CombatFrameworkR then return nil end
+    local success, result = pcall(function()
+        local ac = CombatFrameworkR.activeController
+        local ret = ac.blades[1]
+        if not ret then 
+            local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+            return tool and tool.Name or "Melee"
+        end
+        pcall(function()
+            while ret.Parent ~= LocalPlayer.Character do ret = ret.Parent end
+        end)
+        return ret
+    end)
+    return success and result or "Melee"
 end
 
 local function AttackFunction()
-	local ac = CombatFrameworkR.activeController
-	if ac and ac.equipped then
-		local bladehit = {} -- Simplified for now
-        -- Logic to find enemies would go here
-        
-		if #bladehit > 0 or true then -- Force attack for now
-            -- Simplified attack logic to avoid complex upvalue manipulation which might break
-             if ac.hitboxMagnitude ~= 60 then
+    if not CombatFrameworkR then return end
+    pcall(function()
+        local ac = CombatFrameworkR.activeController
+        if ac and ac.equipped then
+            if ac.hitboxMagnitude ~= 60 then
                 ac.hitboxMagnitude = 60
             end
             ac:attack()
-            game:GetService("ReplicatedStorage").RigControllerEvent:FireServer("weaponChange",tostring(CurrentWeapon()))
-            game:GetService("ReplicatedStorage").RigControllerEvent:FireServer("hit", bladehit, 2, "")
-		end
-	end
+            local currentWeapon = CurrentWeapon()
+            if currentWeapon then
+                ReplicatedStorage.RigControllerEvent:FireServer("weaponChange", tostring(currentWeapon))
+            end
+        end
+    end)
 end
 
 -- Comprehensive Quest Database (Phase 1)
@@ -235,67 +243,65 @@ end
 
 -- Enhanced Auto Farm Loop (Phase 1)
 task.spawn(function()
+    -- Wait for player data to load
+    repeat task.wait() until LocalPlayer and LocalPlayer:FindFirstChild("Data") and LocalPlayer.Data:FindFirstChild("Level")
+    
     while task.wait() do
         if _G.Settings.Main["Auto Farm Level"] and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local level = LocalPlayer.Data.Level.Value
-            local questData = GetQuestData(level)
-            
-            if not questData then 
-                task.wait(5)
-                continue 
-            end
-            
-            -- Auto-accept quest
-            local hasQuest = LocalPlayer.PlayerGui.Main.Quest.Visible
-            local questTitle = LocalPlayer.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text
-            
-            if not hasQuest or not questTitle:find(questData.Mob) then
-                -- Navigate to quest giver
-                local distanceToNPC = (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude
+            pcall(function()
+                local level = LocalPlayer.Data.Level.Value
+                local questData = GetQuestData(level)
                 
-                if distanceToNPC > 20 then
-                    toTarget(questData.NPCPos)
-                else
-                    -- Accept quest
-                    pcall(function()
+                if not questData then return end
+                
+                -- Auto-accept quest
+                local hasQuest = LocalPlayer.PlayerGui.Main.Quest.Visible
+                local questTitle = LocalPlayer.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text
+                
+                if not hasQuest or not questTitle:find(questData.Mob) then
+                    -- Navigate to quest giver
+                    local distanceToNPC = (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude
+                    
+                    if distanceToNPC > 20 then
+                        toTarget(questData.NPCPos)
+                    else
+                        -- Accept quest
                         ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", questData.Quest, questData.QuestNum)
-                    end)
-                    task.wait(0.5)
-                end
-            else
-                -- Farm mobs
-                local targetEnemy = GetClosestEnemy(questData.Mob)
-                
-                if targetEnemy then
-                    -- Stuck detection
-                    if IsStuck() then
-                        warn("Stuck detected! Retrying...")
-                        LocalPlayer.Character.HumanoidRootPart.CFrame = targetEnemy.HumanoidRootPart.CFrame * CFrame.new(0, 50, 30)
-                        task.wait(1)
-                        continue
-                    end
-                    
-                    -- Move to enemy
-                    local targetCFrame = targetEnemy.HumanoidRootPart.CFrame * CFrame.new(0, 20, 0)
-                    toTarget(targetCFrame)
-                    
-                    -- Auto Buso Haki
-                    if _G.Settings.Configs["Auto Haki"] and not LocalPlayer.Character:FindFirstChild("HasBuso") then
-                        pcall(function()
-                            ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso")
-                        end)
-                    end
-                    
-                    -- Attack
-                    if _G.Settings.Configs["Fast Attack"] then
-                        pcall(AttackFunction)
+                        task.wait(0.5)
                     end
                 else
-                    -- No enemies alive, wait at spawn
-                    toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
-                    task.wait(2)
+                    -- Farm mobs
+                    local targetEnemy = GetClosestEnemy(questData.Mob)
+                    
+                    if targetEnemy then
+                        -- Stuck detection
+                        if IsStuck() then
+                            warn("Stuck detected! Retrying...")
+                            LocalPlayer.Character.HumanoidRootPart.CFrame = targetEnemy.HumanoidRootPart.CFrame * CFrame.new(0, 50, 30)
+                            task.wait(1)
+                            return
+                        end
+                        
+                        -- Move to enemy
+                        local targetCFrame = targetEnemy.HumanoidRootPart.CFrame * CFrame.new(0, 20, 0)
+                        toTarget(targetCFrame)
+                        
+                        -- Auto Buso Haki
+                        if _G.Settings.Configs["Auto Haki"] and not LocalPlayer.Character:FindFirstChild("HasBuso") then
+                            ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso")
+                        end
+                        
+                        -- Attack
+                        if _G.Settings.Configs["Fast Attack"] then
+                            AttackFunction()
+                        end
+                    else
+                        -- No enemies alive, wait at spawn
+                        toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
+                        task.wait(2)
+                    end
                 end
-            end
+            end)
         end
     end
 end)
