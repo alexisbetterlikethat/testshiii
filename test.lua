@@ -207,7 +207,9 @@ Tab:CreateSection("Export")
 
 Tab:CreateButton({
     Name = "One Click Dump",
+    Description = "Exports the game dump to clipboard",
     Callback = function()
+        print("One Click Dump button pressed")
         Luna:Notification({
             Title = "Dumping...",
             Content = "Analyzing game. This may freeze for a moment.",
@@ -237,4 +239,4 @@ Tab:CreateButton({
             end
         end)
     end
-}, "OneClickDump")
+})
