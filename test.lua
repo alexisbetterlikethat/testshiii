@@ -597,7 +597,7 @@ local RageSettings = {
     NewPlayerWindow = 45,
     NewPlayerPriorityBonus = 35,
     DesperateTargetDelay = 2.5,
-    IgnoreVoidTargets = false,
+    IgnoreVoidTargets = true,
     PredictVelocity = false,
     MultiShot = true,
     ShotBurst = 2
@@ -1773,6 +1773,10 @@ function RageSystem.scanForRageTarget(params)
             continue
         end
 
+        if not ignoreVoid and RageSystem.isTargetOverVoid(root, character) then
+            continue
+        end
+
         local distance = (root.Position - RootPart.Position).Magnitude
         if distance > maxDistance then
             continue
@@ -1810,7 +1814,7 @@ function RageSystem.getRageTarget()
         maxDistance = maxDistance,
         ignoreCooldown = desperate,
         ignoreSpawnProtection = desperate,
-        ignoreVoid = false,
+        ignoreVoid = not RageSettings.IgnoreVoidTargets,
         ignoreHeight = false
     })
 
@@ -1827,7 +1831,7 @@ function RageSystem.getRageTarget()
         maxDistance = maxDistance * 1.5,
         ignoreCooldown = true,
         ignoreSpawnProtection = true,
-        ignoreVoid = false,
+        ignoreVoid = not RageSettings.IgnoreVoidTargets,
         ignoreHeight = false
     })
 end
@@ -2122,6 +2126,16 @@ function RageSystem.rageAutoFire()
     end
 end
 
+function RageSystem.expandHitbox(character)
+    if not character then return end
+    local head = character:FindFirstChild("Head")
+    if head and head:IsA("BasePart") then
+        head.Size = Vector3.new(15, 15, 15)
+        head.CanCollide = false
+        head.Transparency = 0.7 -- Visible but see-through
+    end
+end
+
 function RageSystem.startRageMode()
     RageSystem.stopRageMode()
     if not state.rageMode then
@@ -2200,6 +2214,7 @@ function RageSystem.startRageMode()
         RageSystem.updateRageAimTarget(targetRoot)
         RageSystem.lockRageCamera(targetRoot)
         RageSystem.rageAutoFire()
+        RageSystem.expandHitbox(targetRoot.Parent)
         
         -- ForceField Removal (Visual/Targeting)
         if targetRoot.Parent then
