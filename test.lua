@@ -213,7 +213,7 @@ Tab:CreateButton({
         Luna:Notification({
             Title = "Dumping...",
             Content = "Analyzing game. This may freeze for a moment.",
-            Icon = "hourglass_empty",
+            Icon = "info",
             ImageSource = "Material"
         })
         
@@ -225,7 +225,7 @@ Tab:CreateButton({
                 Luna:Notification({
                     Title = "Success",
                     Content = "Full game dump copied to clipboard!",
-                    Icon = "check_circle",
+                    Icon = "check",
                     ImageSource = "Material"
                 })
             else
@@ -233,7 +233,7 @@ Tab:CreateButton({
                 Luna:Notification({
                     Title = "Failed",
                     Content = "Dump failed. Check console (F9).",
-                    Icon = "cancel",
+                    Icon = "close",
                     ImageSource = "Material"
                 })
             end
