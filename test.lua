@@ -89,14 +89,22 @@ task.spawn(BypassAntiCheat)
 -- Helper Functions (Adapted from provided code)
 local function toTarget(targetPos)
     if not targetPos then return end
-    if type(targetPos) == "CFrame" then targetPos = targetPos.Position end
-    if type(targetPos) == "Vector3" then targetPos = CFrame.new(targetPos) end
+    
+    -- Convert to CFrame properly
+    local targetCFrame
+    if typeof(targetPos) == "CFrame" then
+        targetCFrame = targetPos
+    elseif typeof(targetPos) == "Vector3" then
+        targetCFrame = CFrame.new(targetPos)
+    else
+        return
+    end
 
     local Character = LocalPlayer.Character
     if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
     
     local RootPart = Character.HumanoidRootPart
-    local Distance = (targetPos.Position - RootPart.Position).Magnitude
+    local Distance = (targetCFrame.Position - RootPart.Position).Magnitude
     
     -- Safe Tween Logic
     local BaseSpeed = 300
@@ -107,7 +115,7 @@ local function toTarget(targetPos)
     if Distance > 1000 then Speed = 350 end 
 
     local TweenInfo = TweenInfo.new(Distance / Speed, Enum.EasingStyle.Linear)
-    local Tween = TweenService:Create(RootPart, TweenInfo, {CFrame = targetPos})
+    local Tween = TweenService:Create(RootPart, TweenInfo, {CFrame = targetCFrame})
     
     -- Bypass: Sit to prevent some physics checks
     if Character:FindFirstChild("Humanoid") then
@@ -312,7 +320,8 @@ end)
 local MainTab = Window:CreateTab({
     Name = "Main",
     Icon = "home",
-    ImageSource = "Material"
+    ImageSource = "Material",
+    ShowTitle = true
 })
 
 MainTab:CreateSection("Farming")
@@ -357,7 +366,8 @@ MainTab:CreateDropdown({
 local StatsTab = Window:CreateTab({
     Name = "Stats",
     Icon = "bar_chart",
-    ImageSource = "Material"
+    ImageSource = "Material",
+    ShowTitle = true
 })
 
 StatsTab:CreateToggle({
@@ -381,8 +391,9 @@ StatsTab:CreateDropdown({
 -- Fruits Tab (Fruit Finder)
 local FruitsTab = Window:CreateTab({
     Name = "Fruits",
-    Icon = "eco", -- Leaf/Fruit icon
-    ImageSource = "Material"
+    Icon = "spa",
+    ImageSource = "Material",
+    ShowTitle = true
 })
 
 FruitsTab:CreateToggle({
@@ -584,8 +595,9 @@ task.spawn(AutoRaidLoop)
 -- Raid Tab
 local RaidTab = Window:CreateTab({
     Name = "Raid",
-    Icon = "token",
-    ImageSource = "Material"
+    Icon = "local_fire_department",
+    ImageSource = "Material",
+    ShowTitle = true
 })
 
 RaidTab:CreateDropdown({
@@ -634,7 +646,8 @@ RaidTab:CreateButton({
 local VisualsTab = Window:CreateTab({
     Name = "Visuals",
     Icon = "visibility",
-    ImageSource = "Material"
+    ImageSource = "Material",
+    ShowTitle = true
 })
 
 VisualsTab:CreateToggle({
@@ -658,8 +671,9 @@ VisualsTab:CreateToggle({
 -- Teleport Tab
 local TeleportTab = Window:CreateTab({
     Name = "Teleport",
-    Icon = "flight",
-    ImageSource = "Material"
+    Icon = "flight_takeoff",
+    ImageSource = "Material",
+    ShowTitle = true
 })
 
 local PlayerDropdown = TeleportTab:CreateDropdown({
@@ -698,7 +712,8 @@ TeleportTab:CreateButton({
 local MiscTab = Window:CreateTab({
     Name = "Misc",
     Icon = "settings",
-    ImageSource = "Material"
+    ImageSource = "Material",
+    ShowTitle = true
 })
 
 MiscTab:CreateToggle({
