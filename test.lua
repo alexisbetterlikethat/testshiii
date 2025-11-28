@@ -329,6 +329,7 @@ MainTab:CreateDropdown({
     Name = "Select Weapon",
     Options = {"Melee", "Sword", "Fruit"},
     CurrentOption = {"Melee"},
+    MultipleOptions = false,
     Callback = function(Option)
         _G.Settings.Configs["Select Weapon"] = Option
     end
@@ -346,6 +347,7 @@ MainTab:CreateDropdown({
     Name = "Fast Attack Speed",
     Options = {"Fast", "Normal", "Slow"},
     CurrentOption = {"Fast"},
+    MultipleOptions = false,
     Callback = function(Option)
         _G.Settings.Configs["Fast Attack Type"] = Option
     end
@@ -370,6 +372,7 @@ StatsTab:CreateDropdown({
     Name = "Select Stat",
     Options = {"Melee", "Defense", "Sword", "Gun", "Demon Fruit"},
     CurrentOption = {"Melee"},
+    MultipleOptions = false,
     Callback = function(Option)
         _G.Settings.Stats["Select Stats"] = Option
     end
@@ -589,6 +592,7 @@ RaidTab:CreateDropdown({
     Name = "Select Raid",
     Options = RaidList,
     CurrentOption = {"Flame"},
+    MultipleOptions = false,
     Callback = function(Option)
         Raid.SelectedRaid = Option
     end
@@ -662,6 +666,7 @@ local PlayerDropdown = TeleportTab:CreateDropdown({
     Name = "Select Player",
     Options = {},
     CurrentOption = {""},
+    MultipleOptions = false,
     Callback = function(Option)
         _G.SelectedPlayer = Option
     end
