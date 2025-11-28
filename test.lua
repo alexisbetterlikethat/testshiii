@@ -391,7 +391,7 @@ StatsTab:CreateDropdown({
 -- Fruits Tab (Fruit Finder)
 local FruitsTab = Window:CreateTab({
     Name = "Fruits",
-    Icon = "spa",
+    Icon = "eco",
     ImageSource = "Material",
     ShowTitle = true
 })
@@ -595,7 +595,7 @@ task.spawn(AutoRaidLoop)
 -- Raid Tab
 local RaidTab = Window:CreateTab({
     Name = "Raid",
-    Icon = "local_fire_department",
+    Icon = "whatshot",
     ImageSource = "Material",
     ShowTitle = true
 })
@@ -671,7 +671,7 @@ VisualsTab:CreateToggle({
 -- Teleport Tab
 local TeleportTab = Window:CreateTab({
     Name = "Teleport",
-    Icon = "flight_takeoff",
+    Icon = "explore",
     ImageSource = "Material",
     ShowTitle = true
 })
