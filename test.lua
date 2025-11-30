@@ -820,39 +820,95 @@ MiscTab:CreateToggle({
 }, "AutoHaki")
 
 MiscTab:CreateButton({
-    Name = "Print Current Position",
+    Name = "Copy Current Position",
     Callback = function()
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             local pos = LocalPlayer.Character.HumanoidRootPart.Position
-            print("Current Position: " .. tostring(pos))
-            DebugPrint("Current Position: " .. tostring(pos))
+            local posStr = string.format("%.2f, %.2f, %.2f", pos.X, pos.Y, pos.Z)
+            local cframeStr = string.format("CFrame.new(%.2f, %.2f, %.2f)", pos.X, pos.Y, pos.Z)
+            
+            print("Position: " .. posStr)
+            
+            if setclipboard then
+                setclipboard(cframeStr)
+                Luna:Notification({
+                    Title = "Position Copied",
+                    Content = posStr,
+                    Icon = "my_location",
+                    ImageSource = "Material"
+                })
+            else
+                 Luna:Notification({
+                    Title = "Position Printed",
+                    Content = "Check Console (F9)",
+                    Icon = "info",
+                    ImageSource = "Material"
+                })
+            end
         end
     end
 })
 
 MiscTab:CreateButton({
-    Name = "Dump All NPCs (Console)",
+    Name = "Dump NPCs (Clipboard)",
     Callback = function()
-        print("--- DUMPING NPCS ---")
-        local function dump(model)
+        local output = {}
+        local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position or Vector3.new(0,0,0)
+        
+        local function collect(model, source)
             if model:IsA("Model") and model:FindFirstChild("Humanoid") and model:FindFirstChild("HumanoidRootPart") then
-                print("NPC: " .. model.Name .. " | Pos: " .. tostring(model.HumanoidRootPart.Position))
+                local pos = model.HumanoidRootPart.Position
+                local dist = (pos - myPos).Magnitude
+                table.insert(output, {
+                    Name = model.Name,
+                    Pos = pos,
+                    Dist = dist,
+                    Source = source
+                })
             end
         end
         
         if workspace:FindFirstChild("NPCs") then
             for _, v in ipairs(workspace.NPCs:GetChildren()) do
-                dump(v)
+                collect(v, "NPCs")
             end
         end
         
         for _, v in ipairs(workspace:GetChildren()) do
             if v:FindFirstChild("Humanoid") and not Players:GetPlayerFromCharacter(v) then
-                dump(v)
+                collect(v, "Workspace")
             end
         end
-        print("--- END DUMP ---")
-        DebugPrint("NPC Dump Complete. Check Console (F9).")
+        
+        -- Sort by distance
+        table.sort(output, function(a, b) return a.Dist < b.Dist end)
+        
+        -- Format
+        local textLines = {}
+        table.insert(textLines, "--- NPC DUMP (Sorted by Distance) ---")
+        for _, data in ipairs(output) do
+            local line = string.format("Name: %-20s | Dist: %-5.0f | Pos: %.0f, %.0f, %.0f", data.Name, data.Dist, data.Pos.X, data.Pos.Y, data.Pos.Z)
+            table.insert(textLines, line)
+            print(line) -- Keep console output
+        end
+        
+        local finalStr = table.concat(textLines, "\n")
+        if setclipboard then
+            setclipboard(finalStr)
+            Luna:Notification({
+                Title = "Dump Copied!",
+                Content = "NPC list copied to clipboard.",
+                Icon = "content_copy",
+                ImageSource = "Material"
+            })
+        else
+            Luna:Notification({
+                Title = "Clipboard Error",
+                Content = "Your executor does not support setclipboard.",
+                Icon = "error",
+                ImageSource = "Material"
+            })
+        end
     end
 })
 
