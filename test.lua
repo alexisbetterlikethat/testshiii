@@ -1,8 +1,3 @@
---[[
-    AERO HUB - GAME DUMPER (REWRITTEN)
-    Focus: Stability, Speed, and Utility.
-]]
-
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/master/source.lua"))()
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -259,3 +254,4 @@ Tab:CreateButton({
         end)
     end
 })
+
