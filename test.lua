@@ -169,4 +169,93 @@ Tab:CreateButton({
             end
         end)
     end
+    end
+})
+
+Tab:CreateButton({
+    Name = "Dump NPCs & Quests (Clipboard)",
+    Description = "Fast scan of NPCs and Quest Givers",
+    Callback = function()
+        Luna:Notification({
+            Title = "Scanning...",
+            Content = "Please wait...",
+            Icon = "search",
+            ImageSource = "Lucide"
+        })
+        
+        task.defer(function()
+            local output = {}
+            local myPos = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and Players.LocalPlayer.Character.HumanoidRootPart.Position or Vector3.new(0,0,0)
+            
+            local function collect(model, source)
+                if model:IsA("Model") then
+                    local hasHumanoid = model:FindFirstChild("Humanoid")
+                    local name = model.Name:lower()
+                    local isQuest = name:find("quest") or name:find("villager") or name:find("giver") or name:find("adventurer") or name:find("teacher")
+                    
+                    if hasHumanoid or isQuest then
+                        local pos = nil
+                        if model:FindFirstChild("HumanoidRootPart") then
+                            pos = model.HumanoidRootPart.Position
+                        elseif model.PrimaryPart then
+                            pos = model.PrimaryPart.Position
+                        elseif model:GetPivot() then
+                            pos = model:GetPivot().Position
+                        end
+                        
+                        if pos then
+                            local dist = (pos - myPos).Magnitude
+                            table.insert(output, {
+                                Name = model.Name,
+                                Pos = pos,
+                                Dist = dist,
+                                Source = source
+                            })
+                        end
+                    end
+                end
+            end
+            
+            -- Scan
+            local locations = {workspace:FindFirstChild("NPCs"), workspace:FindFirstChild("Enemies"), workspace}
+            for _, loc in ipairs(locations) do
+                if loc then
+                    for _, v in ipairs(loc:GetChildren()) do
+                        collect(v, loc.Name)
+                    end
+                end
+            end
+            
+            -- Sort
+            table.sort(output, function(a, b) return a.Dist < b.Dist end)
+            
+            -- Format
+            local lines = {}
+            table.insert(lines, "--- NPC & QUEST DUMP ---")
+            for _, data in ipairs(output) do
+                local line = string.format("Name: %-20s | Pos: %.0f, %.0f, %.0f | Dist: %.0f", data.Name, data.Pos.X, data.Pos.Y, data.Pos.Z, data.Dist)
+                table.insert(lines, line)
+            end
+            
+            local result = table.concat(lines, "\n")
+            
+            if setclipboard then
+                setclipboard(result)
+                Luna:Notification({
+                    Title = "Copied!",
+                    Content = "Dump copied to clipboard.",
+                    Icon = "copy",
+                    ImageSource = "Lucide"
+                })
+            else
+                print(result)
+                Luna:Notification({
+                    Title = "Printed",
+                    Content = "Check console (F9).",
+                    Icon = "terminal",
+                    ImageSource = "Lucide"
+                })
+            end
+        end)
+    end
 })
