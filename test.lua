@@ -176,29 +176,29 @@ end
 -- Comprehensive Quest Database (Phase 1)
 local QuestDatabase = {
     -- First Sea
-    {Level = 1, Quest = "BanditQuest1", QuestNum = 1, NPCPos = CFrame.new(1059.37, 15.45, 1550.42), Mob = "Bandit"},
-    {Level = 10, Quest = "JungleQuest", QuestNum = 1, NPCPos = CFrame.new(-1598.08, 36.85, 153.38), Mob = "Monkey"},
-    {Level = 15, Quest = "BuggyQuest1", QuestNum = 1, NPCPos = CFrame.new(-1140.46, 4.13, 3829.09), Mob = "Pirate"},
-    {Level = 30, Quest = "DesertQuest", QuestNum = 1, NPCPos = CFrame.new(894.49, 5.14, 4392.27), Mob = "Desert Bandit"},
-    {Level = 60, Quest = "SnowQuest", QuestNum = 1, NPCPos = CFrame.new(1389.74, 87.27, -1298.91), Mob = "Snowman"},
-    {Level = 90, Quest = "MarineQuest2", QuestNum = 1, NPCPos = CFrame.new(-5039.58, 28.19, 4325.45), Mob = "Chief Petty Officer"},
-    {Level = 100, Quest = "SnowMountainQuest", QuestNum = 1, NPCPos = CFrame.new(607.05, 401.44, -5370.57), Mob = "Snow Trooper"},
-    {Level = 120, Quest = "IceSideQuest", QuestNum = 1, NPCPos = CFrame.new(-6059.96, 15.25, -4904.24), Mob = "Winter Warrior"},
-    {Level = 150, Quest = "PrisonQuest", QuestNum = 1, NPCPos = CFrame.new(5308.93, 1.64, 472.87), Mob = "Prisoner"},
-    {Level = 190, Quest = "ColoseumQuest", QuestNum = 1, NPCPos = CFrame.new(-1819.69, 7.38, -2982.03), Mob = "Gladiator"},
+    {Level = 1, Quest = "BanditQuest1", QuestNum = 1, NPCPos = CFrame.new(1059.37, 15.45, 1550.42), Mob = "Bandit", NPCName = "Bandit Quest Giver"},
+    {Level = 10, Quest = "JungleQuest", QuestNum = 1, NPCPos = CFrame.new(-1598.08, 36.85, 153.38), Mob = "Monkey", NPCName = "Adventurer"},
+    {Level = 15, Quest = "BuggyQuest1", QuestNum = 1, NPCPos = CFrame.new(-1140.46, 4.13, 3829.09), Mob = "Pirate", NPCName = "Pirate Adventurer"}, -- Verify Name
+    {Level = 30, Quest = "DesertQuest", QuestNum = 1, NPCPos = CFrame.new(894.49, 5.14, 4392.27), Mob = "Desert Bandit", NPCName = "Desert Adventurer"}, -- Verify Name
+    {Level = 60, Quest = "SnowQuest", QuestNum = 1, NPCPos = CFrame.new(1389.74, 87.27, -1298.91), Mob = "Snowman", NPCName = "Villager"},
+    {Level = 90, Quest = "MarineQuest2", QuestNum = 1, NPCPos = CFrame.new(-5039.58, 28.19, 4325.45), Mob = "Chief Petty Officer", NPCName = "Marine Quest Giver"},
+    {Level = 100, Quest = "SnowMountainQuest", QuestNum = 1, NPCPos = CFrame.new(607.05, 401.44, -5370.57), Mob = "Snow Trooper", NPCName = "Villager"},
+    {Level = 120, Quest = "IceSideQuest", QuestNum = 1, NPCPos = CFrame.new(-6059.96, 15.25, -4904.24), Mob = "Winter Warrior", NPCName = "Villager"},
+    {Level = 150, Quest = "PrisonQuest", QuestNum = 1, NPCPos = CFrame.new(5308.93, 1.64, 472.87), Mob = "Prisoner", NPCName = "Prisoner Quest Giver"}, -- Verify Name
+    {Level = 190, Quest = "ColoseumQuest", QuestNum = 1, NPCPos = CFrame.new(-1819.69, 7.38, -2982.03), Mob = "Gladiator", NPCName = "Colosseum Quest Giver"},
     
     -- Second Sea
-    {Level = 700, Quest = "Area1Quest", QuestNum = 1, NPCPos = CFrame.new(-424.18, 73.04, 1835.17), Mob = "Raider"},
-    {Level = 775, Quest = "Area2Quest", QuestNum = 1, NPCPos = CFrame.new(-2411.81, 73.05, -2823.15), Mob = "Mercenary"},
-    {Level = 850, Quest = "MarineQuest3", QuestNum = 1, NPCPos = CFrame.new(-2440.79, 73.04, -3726.82), Mob = "Marine Lieutenant"},
-    {Level = 950, Quest = "FountainQuest", QuestNum = 1, NPCPos = CFrame.new(5259.81, 38.53, 4050.45), Mob = "Pirate Millionaire"},
+    {Level = 700, Quest = "Area1Quest", QuestNum = 1, NPCPos = CFrame.new(-424.18, 73.04, 1835.17), Mob = "Raider", NPCName = "Quest Giver"},
+    {Level = 775, Quest = "Area2Quest", QuestNum = 1, NPCPos = CFrame.new(-2411.81, 73.05, -2823.15), Mob = "Mercenary", NPCName = "Quest Giver"},
+    {Level = 850, Quest = "MarineQuest3", QuestNum = 1, NPCPos = CFrame.new(-2440.79, 73.04, -3726.82), Mob = "Marine Lieutenant", NPCName = "Quest Giver"},
+    {Level = 950, Quest = "FountainQuest", QuestNum = 1, NPCPos = CFrame.new(5259.81, 38.53, 4050.45), Mob = "Pirate Millionaire", NPCName = "Quest Giver"},
     
     -- Third Sea
-    {Level = 1500, Quest = "PiratePortQuest", QuestNum = 1, NPCPos = CFrame.new(-290.40, 43.77, 5578.55), Mob = "Pirate"},
-    {Level = 1575, Quest = "AmazonQuest2", QuestNum = 1, NPCPos = CFrame.new(5249.27, 38.28, -2234.69), Mob = "Isle Champion"},
-    {Level = 1700, Quest = "MarineTreeIsland", QuestNum = 1, NPCPos = CFrame.new(2179.98, 28.73, -6739.62), Mob = "Marine Commodore"},
-    {Level = 2000, Quest = "DeepForestIsland", QuestNum = 1, NPCPos = CFrame.new(-13234.04, 332.40, -7625.40), Mob = "Reborn Skeleton"},
-    {Level = 2200, Quest = "IceCreamIsland", QuestNum = 1, NPCPos = CFrame.new(-819.01, 65.95, -10965.17), Mob = "Ice Cream Commander"},
+    {Level = 1500, Quest = "PiratePortQuest", QuestNum = 1, NPCPos = CFrame.new(-290.40, 43.77, 5578.55), Mob = "Pirate", NPCName = "Quest Giver"},
+    {Level = 1575, Quest = "AmazonQuest2", QuestNum = 1, NPCPos = CFrame.new(5249.27, 38.28, -2234.69), Mob = "Isle Champion", NPCName = "Quest Giver"},
+    {Level = 1700, Quest = "MarineTreeIsland", QuestNum = 1, NPCPos = CFrame.new(2179.98, 28.73, -6739.62), Mob = "Marine Commodore", NPCName = "Quest Giver"},
+    {Level = 2000, Quest = "DeepForestIsland", QuestNum = 1, NPCPos = CFrame.new(-13234.04, 332.40, -7625.40), Mob = "Reborn Skeleton", NPCName = "Quest Giver"},
+    {Level = 2200, Quest = "IceCreamIsland", QuestNum = 1, NPCPos = CFrame.new(-819.01, 65.95, -10965.17), Mob = "Ice Cream Commander", NPCName = "Quest Giver"},
 }
 
 local function GetQuestData(level)
@@ -229,6 +229,28 @@ local function GetClosestEnemy(mobName)
         end
     end
     return closest
+end
+
+local function FindQuestNPC(npcName)
+    if not npcName then return nil end
+    
+    -- Search in Workspace.NPCs (Common folder)
+    if workspace:FindFirstChild("NPCs") then
+        for _, npc in ipairs(workspace.NPCs:GetChildren()) do
+            if npc.Name == npcName and npc:FindFirstChild("HumanoidRootPart") then
+                return npc.HumanoidRootPart.CFrame
+            end
+        end
+    end
+    
+    -- Search in Workspace (General)
+    for _, npc in ipairs(workspace:GetChildren()) do
+        if npc.Name == npcName and npc:FindFirstChild("HumanoidRootPart") then
+            return npc.HumanoidRootPart.CFrame
+        end
+    end
+    
+    return nil
 end
 
 local function DebugPrint(msg)
@@ -290,7 +312,12 @@ task.spawn(function()
                     local distanceToNPC = (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude
                     
                     if distanceToNPC > 10 then
-                        if questData.NPCPos then
+                        local dynamicPos = FindQuestNPC(questData.NPCName)
+                        if dynamicPos then
+                            DebugPrint("Found Dynamic NPC: " .. questData.NPCName)
+                            toTarget(dynamicPos)
+                        elseif questData.NPCPos then
+                            DebugPrint("NPC Not Found, using Database Pos for " .. questData.Quest)
                             toTarget(questData.NPCPos)
                         else
                             DebugPrint("Error: Quest NPC Position is nil for " .. questData.Quest)
@@ -781,6 +808,17 @@ MiscTab:CreateToggle({
         _G.Settings.Configs["Auto Haki"] = Value
     end
 }, "AutoHaki")
+
+MiscTab:CreateButton({
+    Name = "Print Current Position",
+    Callback = function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local pos = LocalPlayer.Character.HumanoidRootPart.Position
+            print("Current Position: " .. tostring(pos))
+            DebugPrint("Current Position: " .. tostring(pos))
+        end
+    end
+})
 
 task.spawn(function()
     while task.wait(1) do
