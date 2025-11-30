@@ -793,6 +793,14 @@ TeleportTab:CreateButton({
     end
 })
 
+TeleportTab:CreateButton({
+    Name = "Teleport to Starter Island (Safe)",
+    Callback = function()
+        -- Using BanditQuest1 coords as a safe spot (Pirate Starter)
+        toTarget(CFrame.new(1059.37, 15.45, 1550.42))
+    end
+})
+
 -- Misc Tab (Existing)
 local MiscTab = Window:CreateTab({
     Name = "Misc",
@@ -817,6 +825,32 @@ MiscTab:CreateButton({
             print("Current Position: " .. tostring(pos))
             DebugPrint("Current Position: " .. tostring(pos))
         end
+    end
+})
+
+MiscTab:CreateButton({
+    Name = "Dump All NPCs (Console)",
+    Callback = function()
+        print("--- DUMPING NPCS ---")
+        local function dump(model)
+            if model:IsA("Model") and model:FindFirstChild("Humanoid") and model:FindFirstChild("HumanoidRootPart") then
+                print("NPC: " .. model.Name .. " | Pos: " .. tostring(model.HumanoidRootPart.Position))
+            end
+        end
+        
+        if workspace:FindFirstChild("NPCs") then
+            for _, v in ipairs(workspace.NPCs:GetChildren()) do
+                dump(v)
+            end
+        end
+        
+        for _, v in ipairs(workspace:GetChildren()) do
+            if v:FindFirstChild("Humanoid") and not Players:GetPlayerFromCharacter(v) then
+                dump(v)
+            end
+        end
+        print("--- END DUMP ---")
+        DebugPrint("NPC Dump Complete. Check Console (F9).")
     end
 })
 
