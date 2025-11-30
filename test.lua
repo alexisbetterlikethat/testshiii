@@ -850,74 +850,87 @@ MiscTab:CreateButton({
 })
 
 MiscTab:CreateButton({
-    Name = "Dump NPCs (Clipboard)",
+    Name = "Dump NPCs (Deep Search)",
     Callback = function()
         local output = {}
         local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position or Vector3.new(0,0,0)
         
-        local function collect(model, source)
+        local targetNames = {"villager", "adventurer", "quest", "giver", "winter", "teacher"}
+        
+        Luna:Notification({
+            Title = "Dumping...",
+            Content = "Performing deep search...",
+            Icon = "search",
+            ImageSource = "Material"
+        })
+        
+        local function isTarget(name)
+            local n = name:lower()
+            for _, t in ipairs(targetNames) do
+                if n:find(t) then return true end
+            end
+            return false
+        end
+
+        local function collect(model)
             if model:IsA("Model") then
-                -- Check for Humanoid OR "Quest" in name
-                local hasHumanoid = model:FindFirstChild("Humanoid")
-                local isQuest = model.Name:lower():find("quest") or model.Name:lower():find("villager") or model.Name:lower():find("giver")
-                
-                if hasHumanoid or isQuest then
-                    -- Get Position (HRP or Pivot)
+                if isTarget(model.Name) or model:FindFirstChild("Humanoid") then
+                     -- Get Position
                     local pos = nil
                     if model:FindFirstChild("HumanoidRootPart") then
                         pos = model.HumanoidRootPart.Position
                     elseif model.PrimaryPart then
                         pos = model.PrimaryPart.Position
-                    else
+                    elseif model:GetPivot() then
                         pos = model:GetPivot().Position
                     end
                     
                     if pos then
                         local dist = (pos - myPos).Magnitude
-                        table.insert(output, {
-                            Name = model.Name,
-                            Pos = pos,
-                            Dist = dist,
-                            Source = source
-                        })
+                        -- Only add if close (2000 studs) or it's a target name
+                        if dist < 2000 or isTarget(model.Name) then
+                            table.insert(output, {
+                                Name = model.Name,
+                                Pos = pos,
+                                Dist = dist,
+                                Source = "DeepSearch"
+                            })
+                        end
                     end
                 end
             end
         end
         
-        -- Check Common Folders
-        if workspace:FindFirstChild("NPCs") then
-            for _, v in ipairs(workspace.NPCs:GetChildren()) do
-                collect(v, "NPCs")
+        -- Deep Search (Protected)
+        local success, err = pcall(function()
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("Model") then
+                    collect(v)
+                end
             end
-        end
+        end)
         
-        if workspace:FindFirstChild("Enemies") then
-            for _, v in ipairs(workspace.Enemies:GetChildren()) do
-                collect(v, "Enemies")
-            end
-        end
-        
-        -- Check Workspace Root
-        for _, v in ipairs(workspace:GetChildren()) do
-            if v:IsA("Model") and not Players:GetPlayerFromCharacter(v) then
-                collect(v, "Workspace")
-            end
-        end
+        if not success then warn("Deep search error: " .. tostring(err)) end
         
         -- Sort by distance
         table.sort(output, function(a, b) return a.Dist < b.Dist end)
         
         -- Format
         local textLines = {}
-        table.insert(textLines, "--- NPC DUMP (Sorted by Distance) ---")
+        table.insert(textLines, "--- NPC DUMP (Deep Search) ---")
         if #output == 0 then
-             table.insert(textLines, "NO NPCS FOUND! (Check if you are close enough)")
+             table.insert(textLines, "NO NPCS FOUND!")
         else
+            -- Remove duplicates (simple check)
+            local seen = {}
             for _, data in ipairs(output) do
-                local line = string.format("Name: %-20s | Dist: %-5.0f | Pos: %.0f, %.0f, %.0f | Src: %s", data.Name, data.Dist, data.Pos.X, data.Pos.Y, data.Pos.Z, data.Source)
-                table.insert(textLines, line)
-                print(line)
+                local key = data.Name .. tostring(math.floor(data.Pos.X))
+                if not seen[key] then
+                    seen[key] = true
+                    local line = string.format("Name: %-20s | Dist: %-5.0f | Pos: %.0f, %.0f, %.0f", data.Name, data.Dist, data.Pos.X, data.Pos.Y, data.Pos.Z)
+                    table.insert(textLines, line)
+                    print(line)
+                end
             end
         end
         
@@ -926,18 +939,19 @@ MiscTab:CreateButton({
             setclipboard(finalStr)
             Luna:Notification({
                 Title = "Dump Copied!",
-                Content = "Found " .. #output .. " NPCs.",
+                Content = "Check clipboard.",
                 Icon = "content_copy",
                 ImageSource = "Material"
             })
-        else
-            Luna:Notification({
-                Title = "Clipboard Error",
-                Content = "Executor doesn't support setclipboard.",
-                Icon = "error",
-                ImageSource = "Material"
-            })
         end
+    end
+})
+
+TeleportTab:CreateButton({
+    Name = "Teleport to Frozen Village (Try)",
+    Callback = function()
+        -- Approximate Frozen Village
+        toTarget(CFrame.new(1120, 100, -1200))
     end
 })
 
