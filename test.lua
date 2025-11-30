@@ -763,9 +763,11 @@ local TeleportTab = Window:CreateTab({
 
 local PlayerDropdown = TeleportTab:CreateDropdown({
     Name = "Select Player",
-    Options = {"Click Refresh"},
-    CurrentOption = {"Click Refresh"},
+    Description = nil,
+    Options = {},
+    CurrentOption = {},
     MultipleOptions = false,
+    SpecialType = "Player",
     Callback = function(Option)
         _G.SelectedPlayer = Option
     end
