@@ -856,26 +856,51 @@ MiscTab:CreateButton({
         local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position or Vector3.new(0,0,0)
         
         local function collect(model, source)
-            if model:IsA("Model") and model:FindFirstChild("Humanoid") and model:FindFirstChild("HumanoidRootPart") then
-                local pos = model.HumanoidRootPart.Position
-                local dist = (pos - myPos).Magnitude
-                table.insert(output, {
-                    Name = model.Name,
-                    Pos = pos,
-                    Dist = dist,
-                    Source = source
-                })
+            if model:IsA("Model") then
+                -- Check for Humanoid OR "Quest" in name
+                local hasHumanoid = model:FindFirstChild("Humanoid")
+                local isQuest = model.Name:lower():find("quest") or model.Name:lower():find("villager") or model.Name:lower():find("giver")
+                
+                if hasHumanoid or isQuest then
+                    -- Get Position (HRP or Pivot)
+                    local pos = nil
+                    if model:FindFirstChild("HumanoidRootPart") then
+                        pos = model.HumanoidRootPart.Position
+                    elseif model.PrimaryPart then
+                        pos = model.PrimaryPart.Position
+                    else
+                        pos = model:GetPivot().Position
+                    end
+                    
+                    if pos then
+                        local dist = (pos - myPos).Magnitude
+                        table.insert(output, {
+                            Name = model.Name,
+                            Pos = pos,
+                            Dist = dist,
+                            Source = source
+                        })
+                    end
+                end
             end
         end
         
+        -- Check Common Folders
         if workspace:FindFirstChild("NPCs") then
             for _, v in ipairs(workspace.NPCs:GetChildren()) do
                 collect(v, "NPCs")
             end
         end
         
+        if workspace:FindFirstChild("Enemies") then
+            for _, v in ipairs(workspace.Enemies:GetChildren()) do
+                collect(v, "Enemies")
+            end
+        end
+        
+        -- Check Workspace Root
         for _, v in ipairs(workspace:GetChildren()) do
-            if v:FindFirstChild("Humanoid") and not Players:GetPlayerFromCharacter(v) then
+            if v:IsA("Model") and not Players:GetPlayerFromCharacter(v) then
                 collect(v, "Workspace")
             end
         end
@@ -886,10 +911,14 @@ MiscTab:CreateButton({
         -- Format
         local textLines = {}
         table.insert(textLines, "--- NPC DUMP (Sorted by Distance) ---")
-        for _, data in ipairs(output) do
-            local line = string.format("Name: %-20s | Dist: %-5.0f | Pos: %.0f, %.0f, %.0f", data.Name, data.Dist, data.Pos.X, data.Pos.Y, data.Pos.Z)
-            table.insert(textLines, line)
-            print(line) -- Keep console output
+        if #output == 0 then
+             table.insert(textLines, "NO NPCS FOUND! (Check if you are close enough)")
+        else
+            for _, data in ipairs(output) do
+                local line = string.format("Name: %-20s | Dist: %-5.0f | Pos: %.0f, %.0f, %.0f | Src: %s", data.Name, data.Dist, data.Pos.X, data.Pos.Y, data.Pos.Z, data.Source)
+                table.insert(textLines, line)
+                print(line)
+            end
         end
         
         local finalStr = table.concat(textLines, "\n")
@@ -897,14 +926,14 @@ MiscTab:CreateButton({
             setclipboard(finalStr)
             Luna:Notification({
                 Title = "Dump Copied!",
-                Content = "NPC list copied to clipboard.",
+                Content = "Found " .. #output .. " NPCs.",
                 Icon = "content_copy",
                 ImageSource = "Material"
             })
         else
             Luna:Notification({
                 Title = "Clipboard Error",
-                Content = "Your executor does not support setclipboard.",
+                Content = "Executor doesn't support setclipboard.",
                 Icon = "error",
                 ImageSource = "Material"
             })
