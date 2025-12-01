@@ -55,6 +55,18 @@ _G.Settings = {
         ["Server Hop"] = false,
         ["White Screen"] = false,
     },
+    Shop = {
+        ["Auto Random Fruit"] = false,
+        ["Auto Legendary Sword"] = false,
+        ["Auto Enhancement Color"] = false,
+    },
+    Sea = {
+        ["Auto Sea Beast"] = false,
+        ["Auto Terror Shark"] = false,
+        ["Auto Sea Mobs"] = false,
+        ["Auto Pirate Raid"] = false,
+        ["Selected Boat"] = "PirateBrigade",
+    },
     ESP = {
         ["Player ESP"] = false,
         ["Chest ESP"] = false,
@@ -203,15 +215,80 @@ local function EquipMasteryWeapon()
     return EquipWeaponByType(_G.Settings.Main["Mastery Weapon"])
 end
 
+local function EnsureHaki()
+    if not _G.Settings.Configs["Auto Haki"] then return end
+    local character = LocalPlayer.Character
+    if character and not character:FindFirstChild("HasBuso") then
+        pcall(function()
+            ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso")
+        end)
+    end
+end
+
+local function ReleaseSit()
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if humanoid and humanoid.Sit then
+        humanoid.Sit = false
+    end
+end
+
+local function AnchorEnemy(enemy)
+    local hrp = enemy and enemy:FindFirstChild("HumanoidRootPart")
+    local humanoid = enemy and enemy:FindFirstChildOfClass("Humanoid")
+    if not hrp or not humanoid then return end
+    hrp.CanCollide = false
+    hrp.Size = Vector3.new(60, 60, 60)
+    humanoid.WalkSpeed = 0
+    humanoid.JumpPower = 0
+    humanoid.AutoRotate = false
+end
+
+local function GetClosestActiveEnemy(maxDistance)
+    local character = LocalPlayer.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not root or not workspace:FindFirstChild("Enemies") then return nil end
+    local closest, minDistance
+    for _, enemy in ipairs(workspace.Enemies:GetChildren()) do
+        local humanoid = enemy:FindFirstChildOfClass("Humanoid")
+        local hrp = enemy:FindFirstChild("HumanoidRootPart")
+        if humanoid and humanoid.Health > 0 and hrp then
+            local distance = (hrp.Position - root.Position).Magnitude
+            if distance <= (maxDistance or math.huge) and (not minDistance or distance < minDistance) then
+                closest = enemy
+                minDistance = distance
+            end
+        end
+    end
+    return closest
+end
+
+local function ShouldAutoClick()
+    return _G.Settings.Main["Auto Farm Level"]
+        or _G.Settings.Main["Auto Farm Mastery"]
+        or _G.Settings.Main["Auto Farm Bone"]
+        or _G.Settings.Main["Mob Aura"]
+        or _G.Settings.Main["Auto Elite Hunter"]
+        or _G.Settings.Materials["Auto Farm Material"]
+        or _G.Settings.Sea["Auto Sea Beast"]
+        or _G.Settings.Sea["Auto Terror Shark"]
+        or _G.Settings.Sea["Auto Sea Mobs"]
+        or _G.Settings.Sea["Auto Pirate Raid"]
+end
+
+
 local lastBasicAttack = 0
 local function PerformBasicAttack()
-    if os.clock() - lastBasicAttack < 0.15 then return end
+    if os.clock() - lastBasicAttack < 0.12 then return end
     lastBasicAttack = os.clock()
+    local camera = workspace.CurrentCamera
+    local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
+    local center = Vector2.new(viewport.X / 2, viewport.Y / 2)
     pcall(function()
         VirtualUser:CaptureController()
-        VirtualUser:Button1Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        VirtualUser:Button1Down(center, camera and camera.CFrame or CFrame.new())
         task.delay(0.05, function()
-            VirtualUser:Button1Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            VirtualUser:Button1Up(center, camera and camera.CFrame or CFrame.new())
         end)
     end)
 end
@@ -251,6 +328,20 @@ local function toTarget(targetPos)
     return Tween
 end
 
+local function ApproachEnemy(enemy, hoverHeight)
+    if not enemy then return end
+    local hrp = enemy:FindFirstChild("HumanoidRootPart")
+    local humanoid = enemy:FindFirstChildOfClass("Humanoid")
+    if not hrp or not humanoid or humanoid.Health <= 0 then return end
+    AnchorEnemy(enemy)
+    toTarget(hrp.CFrame * CFrame.new(0, hoverHeight or 30, 0))
+    if EquipPreferredWeapon() then
+        EnsureHaki()
+        ReleaseSit()
+        PerformBasicAttack()
+    end
+end
+
 -- Fast Attack
 local FastAttack = {Distance = 100}
 local RegisterAttack = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RE/RegisterAttack")
@@ -279,6 +370,24 @@ task.spawn(function()
     while task.wait() do
         if _G.Settings.Configs["Fast Attack"] and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") then
             FastAttack:AttackNearest()
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.05) do
+        if ShouldAutoClick() then
+            local target = GetClosestActiveEnemy(90)
+            if target then
+                AnchorEnemy(target)
+                if EquipPreferredWeapon() then
+                    EnsureHaki()
+                    ReleaseSit()
+                    PerformBasicAttack()
+                end
+            end
+        else
+            task.wait(0.15)
         end
     end
 end)
@@ -436,6 +545,42 @@ local function GetClosestEnemyFromList(mobNames)
     return closest
 end
 
+local function GetNearestModelWithRoot(folder)
+    if not folder then return nil end
+    local character = LocalPlayer.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    local closest, minDistance = nil, math.huge
+    for _, model in ipairs(folder:GetChildren()) do
+        if model:IsA("Model") then
+            local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
+            local humanoid = model:FindFirstChildOfClass("Humanoid")
+            if hrp and humanoid and humanoid.Health > 0 then
+                local distance = (hrp.Position - root.Position).Magnitude
+                if distance < minDistance then
+                    minDistance = distance
+                    closest = model
+                end
+            end
+        end
+    end
+    return closest
+end
+
+local function EngageSeaTarget(model, hoverHeight)
+    if not model then return end
+    local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    if not hrp or not humanoid or humanoid.Health <= 0 then return end
+    AnchorEnemy(model)
+    toTarget(hrp.CFrame * CFrame.new(0, hoverHeight or 60, 0))
+    if EquipPreferredWeapon() then
+        EnsureHaki()
+        ReleaseSit()
+        PerformBasicAttack()
+    end
+end
+
 local MaterialRoutes = {
     ["Radiactive Material"] = {
         {Mob = "Factory Staff", Position = CFrame.new(-105.889565, 72.807693, -670.247986), Spawn = "Bar", World = 2},
@@ -585,11 +730,7 @@ task.spawn(function()
                 else
                     local targetEnemy = GetClosestEnemy(questData.Mob)
                     if targetEnemy then
-                        toTarget(targetEnemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
-                        if EquipPreferredWeapon() and _G.Settings.Configs["Auto Haki"] and not LocalPlayer.Character:FindFirstChild("HasBuso") then
-                            ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso")
-                        end
-                        PerformBasicAttack()
+                        ApproachEnemy(targetEnemy, 28)
                     else
                         toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
                     end
@@ -647,15 +788,17 @@ task.spawn(function()
                 local hrp = targetEnemy:FindFirstChild("HumanoidRootPart")
                 local humanoid = targetEnemy:FindFirstChild("Humanoid")
                 if not hrp or not humanoid or humanoid.Health <= 0 then return end
+                AnchorEnemy(targetEnemy)
                 toTarget(hrp.CFrame * CFrame.new(0, 25, 0))
                 local healthPercent = (humanoid.Health / math.max(humanoid.MaxHealth, 1)) * 100
                 if healthPercent <= (_G.Settings.Main["Mastery Health Threshold"] or 25) then
                     if EquipMasteryWeapon() then
+                        EnsureHaki()
+                        ReleaseSit()
                         PerformBasicAttack()
                     end
                 else
-                    EquipPreferredWeapon()
-                    PerformBasicAttack()
+                    ApproachEnemy(targetEnemy, 25)
                 end
             end)
         end
@@ -675,9 +818,7 @@ task.spawn(function()
                 end
                 
                 if target then
-                    toTarget(target.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
-                    EquipPreferredWeapon()
-                    PerformBasicAttack()
+                    ApproachEnemy(target, 30)
                 else
                     -- Teleport to Haunted Castle spawn area if no mobs found
                     toTarget(CFrame.new(-9516.99, 172.02, 6078.47))
@@ -726,9 +867,7 @@ task.spawn(function()
                 end
                 local target = GetClosestEnemyFromList(mobNames)
                 if target and target:FindFirstChild("HumanoidRootPart") then
-                    toTarget(target.HumanoidRootPart.CFrame * CFrame.new(0, 25, 0))
-                    EquipPreferredWeapon()
-                    PerformBasicAttack()
+                    ApproachEnemy(target, 25)
                 else
                     local anchor = route[1]
                     if anchor then
@@ -746,6 +885,40 @@ task.spawn(function()
         if _G.Settings.Bones["Auto Random Bone"] then
             pcall(function()
                 ReplicatedStorage.Remotes.CommF_:InvokeServer("Bones", "Buy", 1, 1)
+            end)
+        end
+    end
+end)
+
+-- Shop Automation
+task.spawn(function()
+    while task.wait(8) do
+        if _G.Settings.Shop["Auto Random Fruit"] then
+            pcall(function()
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy")
+            end)
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(6) do
+        if _G.Settings.Shop["Auto Legendary Sword"] then
+            pcall(function()
+                for idx = 1, 3 do
+                    ReplicatedStorage.Remotes.CommF_:InvokeServer("LegendarySwordDealer", tostring(idx))
+                    task.wait(0.2)
+                end
+            end)
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(10) do
+        if _G.Settings.Shop["Auto Enhancement Color"] then
+            pcall(function()
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("ColorsDealer", "2")
             end)
         end
     end
@@ -769,9 +942,7 @@ task.spawn(function()
                     if targetName then
                         local target = GetClosestEnemy(targetName)
                         if target then
-                            toTarget(target.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
-                            EquipPreferredWeapon()
-                            PerformBasicAttack()
+                            ApproachEnemy(target, 30)
                         else
                             -- Check ReplicatedStorage if not in workspace
                             local rsTarget = ReplicatedStorage:FindFirstChild(targetName)
@@ -828,6 +999,56 @@ task.spawn(function()
         end
     end
 end)
+
+-- Sea Event Automation
+task.spawn(function()
+    while task.wait(0.25) do
+        if _G.Settings.Sea["Auto Sea Beast"] then
+            pcall(function()
+                local target = GetNearestModelWithRoot(workspace:FindFirstChild("SeaBeasts"))
+                if target then
+                    EngageSeaTarget(target, 95)
+                end
+            end)
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.25) do
+        if _G.Settings.Sea["Auto Terror Shark"] then
+            pcall(function()
+                local target = GetClosestEnemy("Terrorshark")
+                if not target then
+                    target = workspace:FindFirstChild("Terrorshark")
+                end
+                if target then
+                    EngageSeaTarget(target, 70)
+                end
+            end)
+        end
+    end
+end)
+
+local SeaEnemyTargets = {
+    ["Auto Sea Mobs"] = {"Shark", "Piranha", "Fish Crew Member", "Fish Crew", "Fishman Raider"},
+    ["Auto Pirate Raid"] = {"Pirate Basic", "Pirate Captain", "Pirate Brute", "Pirate Admiral", "Fish Crew Member"},
+}
+
+for setting, mobList in pairs(SeaEnemyTargets) do
+    task.spawn(function()
+        while task.wait(0.25) do
+            if _G.Settings.Sea[setting] then
+                pcall(function()
+                    local enemy = GetClosestEnemyFromList(mobList)
+                    if enemy and enemy:FindFirstChild("HumanoidRootPart") then
+                        ApproachEnemy(enemy, 32)
+                    end
+                end)
+            end
+        end
+    end)
+end
 
 local ESPColors = {
     Players = Color3.fromRGB(0, 170, 255),
@@ -994,6 +1215,30 @@ local function ServerHop()
 end
 
 -- UI Construction
+local BoatDisplayLookup = {
+    ["Pirate Brigade"] = "PirateBrigade",
+    ["Pirate Sloop"] = "PirateSloop",
+    ["Pirate Basic"] = "PirateBasic",
+    ["Enforcer"] = "Enforcer",
+    ["Rocket Boost"] = "RocketBoost",
+    ["Dinghy"] = "Dinghy",
+}
+
+local BoatDropdownOptions = {}
+for display in pairs(BoatDisplayLookup) do
+    table.insert(BoatDropdownOptions, display)
+end
+table.sort(BoatDropdownOptions)
+
+local function getBoatDisplayName(remoteName)
+    for display, remote in pairs(BoatDisplayLookup) do
+        if remote == remoteName then
+            return display
+        end
+    end
+    return "Pirate Brigade"
+end
+
 local MainTab = Window:CreateTab({Name = "Main", Icon = "home", ImageSource = "Material", ShowTitle = true})
 
 MainTab:CreateSection("Farming")
@@ -1039,6 +1284,84 @@ StatsTab:CreateDropdown({
 }, "SelectStat")
 StatsTab:CreateSlider({Name = "Points per Loop", Range = {1, 100}, Increment = 1, CurrentValue = _G.Settings.Stats["Point Select"], Callback = function(v) _G.Settings.Stats["Point Select"] = v end}, "PointsSelect")
 
+local ShopTab = Window:CreateTab({Name = "Shop", Icon = "shopping_cart", ImageSource = "Material", ShowTitle = true})
+ShopTab:CreateSection("Automation")
+ShopTab:CreateToggle({Name = "Auto Random Fruit", CurrentValue = _G.Settings.Shop["Auto Random Fruit"], Callback = function(v) _G.Settings.Shop["Auto Random Fruit"] = v end}, "AutoRandomFruitShop")
+ShopTab:CreateToggle({Name = "Auto Legendary Sword", CurrentValue = _G.Settings.Shop["Auto Legendary Sword"], Callback = function(v) _G.Settings.Shop["Auto Legendary Sword"] = v end}, "AutoLegendarySword")
+ShopTab:CreateToggle({Name = "Auto Enhancement Color", CurrentValue = _G.Settings.Shop["Auto Enhancement Color"], Callback = function(v) _G.Settings.Shop["Auto Enhancement Color"] = v end}, "AutoEnhancementColor")
+ShopTab:CreateButton({Name = "Buy Random Fruit (Once)", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy")
+end})
+ShopTab:CreateButton({Name = "Buy Haki Color (Once)", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("ColorsDealer", "2")
+end})
+
+ShopTab:CreateSection("Fighting Styles")
+local fightingStyles = {
+    {label = "Black Leg", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyBlackLeg") end},
+    {label = "Electro", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyElectro") end},
+    {label = "Water Kung Fu", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyFishmanKarate") end},
+    {label = "Dragon Claw", remote = function()
+        ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "DragonClaw", "1")
+        ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "DragonClaw", "2")
+    end},
+    {label = "Superhuman", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuySuperhuman") end},
+    {label = "Death Step", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyDeathStep") end},
+    {label = "Sharkman Karate", remote = function()
+        ReplicatedStorage.Remotes.CommF_:InvokeServer("BuySharkmanKarate", true)
+        ReplicatedStorage.Remotes.CommF_:InvokeServer("BuySharkmanKarate")
+    end},
+    {label = "Electric Claw", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyElectricClaw") end},
+    {label = "Dragon Talon", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyDragonTalon") end},
+    {label = "God Human", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyGodhuman") end},
+    {label = "Sanguine Art", remote = function()
+        ReplicatedStorage.Remotes.CommF_:InvokeServer("BuySanguineArt", true)
+        ReplicatedStorage.Remotes.CommF_:InvokeServer("BuySanguineArt")
+    end}
+}
+for _, entry in ipairs(fightingStyles) do
+    ShopTab:CreateButton({Name = "Buy " .. entry.label, Callback = entry.remote})
+end
+
+ShopTab:CreateSection("Abilities & Utility")
+ShopTab:CreateButton({Name = "Buy Geppo", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyHaki", "Geppo")
+end})
+ShopTab:CreateButton({Name = "Buy Buso", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyHaki", "Buso")
+end})
+ShopTab:CreateButton({Name = "Buy Soru", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyHaki", "Soru")
+end})
+ShopTab:CreateButton({Name = "Buy Observation", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("KenTalk", "Buy")
+end})
+
+ShopTab:CreateSection("Legendary Rolls")
+ShopTab:CreateButton({Name = "Legendary Sword Cycle", Callback = function()
+    for idx = 1, 3 do
+        ReplicatedStorage.Remotes.CommF_:InvokeServer("LegendarySwordDealer", tostring(idx))
+        task.wait(0.2)
+    end
+end})
+ShopTab:CreateButton({Name = "Race Reroll", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "Reroll", "1")
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "Reroll", "2")
+end})
+ShopTab:CreateButton({Name = "Stat Refund", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "Refund", "1")
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "Refund", "2")
+end})
+ShopTab:CreateButton({Name = "Buy Black Cape", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyItem", "Black Cape")
+end})
+ShopTab:CreateButton({Name = "Buy Swordsman Hat", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyItem", "Swordsman Hat")
+end})
+ShopTab:CreateButton({Name = "Buy Tomoe Ring", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyItem", "Tomoe Ring")
+end})
+
 local MaterialsTab = Window:CreateTab({Name = "Materials", Icon = "widgets", ImageSource = "Material", ShowTitle = true})
 MaterialsTab:CreateToggle({Name = "Auto Farm Material", CurrentValue = _G.Settings.Materials["Auto Farm Material"], Callback = function(v) _G.Settings.Materials["Auto Farm Material"] = v end}, "AutoFarmMaterial")
 MaterialsTab:CreateDropdown({
@@ -1081,6 +1404,39 @@ TravelTab:CreateButton({Name = "Teleport", Callback = function()
     local cframe = TravelLookup[selection]
     if cframe then toTarget(cframe) end
 end})
+
+local SeaTab = Window:CreateTab({Name = "Sea", Icon = "waves", ImageSource = "Material", ShowTitle = true})
+SeaTab:CreateSection("World Travel")
+SeaTab:CreateButton({Name = "Travel to Sea 1", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelMain")
+end})
+SeaTab:CreateButton({Name = "Travel to Sea 2", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelDressrosa")
+end})
+SeaTab:CreateButton({Name = "Travel to Sea 3", Callback = function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelZou")
+end})
+
+SeaTab:CreateSection("Boats")
+SeaTab:CreateDropdown({
+    Name = "Select Boat",
+    Options = BoatDropdownOptions,
+    CurrentOption = {getBoatDisplayName(_G.Settings.Sea["Selected Boat"])},
+    Callback = function(v)
+        local display = unwrapOption(v)
+        _G.Settings.Sea["Selected Boat"] = BoatDisplayLookup[display] or "PirateBrigade"
+    end
+}, "SelectBoat")
+SeaTab:CreateButton({Name = "Buy Selected Boat", Callback = function()
+    local boat = _G.Settings.Sea["Selected Boat"] or "PirateBrigade"
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyBoat", boat)
+end})
+
+SeaTab:CreateSection("Events")
+SeaTab:CreateToggle({Name = "Auto Sea Beast", CurrentValue = _G.Settings.Sea["Auto Sea Beast"], Callback = function(v) _G.Settings.Sea["Auto Sea Beast"] = v end}, "AutoSeaBeast")
+SeaTab:CreateToggle({Name = "Auto Terror Shark", CurrentValue = _G.Settings.Sea["Auto Terror Shark"], Callback = function(v) _G.Settings.Sea["Auto Terror Shark"] = v end}, "AutoTerrorShark")
+SeaTab:CreateToggle({Name = "Auto Sea Mobs", CurrentValue = _G.Settings.Sea["Auto Sea Mobs"], Callback = function(v) _G.Settings.Sea["Auto Sea Mobs"] = v end}, "AutoSeaMobs")
+SeaTab:CreateToggle({Name = "Auto Pirate Raid", CurrentValue = _G.Settings.Sea["Auto Pirate Raid"], Callback = function(v) _G.Settings.Sea["Auto Pirate Raid"] = v end}, "AutoPirateRaid")
 
 local ESPTab = Window:CreateTab({Name = "ESP", Icon = "visibility", ImageSource = "Material", ShowTitle = true})
 ESPTab:CreateSection("Visual Helpers")
