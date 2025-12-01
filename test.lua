@@ -254,11 +254,14 @@ end
 -- ==========================================
 -- ANTI-AFK (Anti-Kick)
 -- ==========================================
+local ANTI_KICK_ENABLED = true
 local VirtualUser = game:GetService("VirtualUser")
 player.Idled:Connect(function()
-    debugLog("Anti-AFK: Simulating input to prevent kick", "INFO")
-    VirtualUser:CaptureController()
-    VirtualUser:ClickButton2(Vector2.new())
+    if ANTI_KICK_ENABLED then
+        debugLog("Anti-AFK: Simulating input to prevent kick", "INFO")
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end
 end)
 -- ==========================================
 -- HELICOPTER (SPIN BOT) LOGIC
@@ -541,6 +544,456 @@ local function enableFling()
 end
 
 -- ==========================================
+-- JUMP BYPASS LOGIC
+-- ==========================================
+local JUMP_BYPASS_ENABLED = false
+local JUMP_POWER = 50
+
+local function enableJumpBypass()
+    if not player.Character then return end
+    local hum = player.Character:FindFirstChild("Humanoid")
+    if hum then
+        hum.UseJumpPower = true
+        hum.JumpPower = JUMP_POWER
+        JUMP_BYPASS_ENABLED = true
+    end
+end
+
+local function disableJumpBypass()
+    if not player.Character then return end
+    local hum = player.Character:FindFirstChild("Humanoid")
+    if hum then
+        hum.UseJumpPower = false
+        hum.JumpPower = 50 -- Default
+        JUMP_BYPASS_ENABLED = false
+    end
+end
+
+-- ==========================================
+-- SPEED BOOST LOGIC
+-- ==========================================
+local SPEED_BOOST_ENABLED = false
+local SPEED_VAL = 16
+local speedConnection = nil
+
+local function enableSpeedBoost()
+    if SPEED_BOOST_ENABLED then return end
+    SPEED_BOOST_ENABLED = true
+    
+    speedConnection = RunService.Heartbeat:Connect(function()
+        if not SPEED_BOOST_ENABLED then return end
+        local char = player.Character
+        if not char then return end
+        local hum = char:FindFirstChild("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not hum or not root then return end
+        
+        local moveDir = hum.MoveDirection
+        if moveDir.Magnitude > 0 then
+            root.AssemblyLinearVelocity = Vector3.new(
+                moveDir.X * SPEED_VAL,
+                root.AssemblyLinearVelocity.Y,
+                moveDir.Z * SPEED_VAL
+            )
+        end
+    end)
+end
+
+local function disableSpeedBoost()
+    if not SPEED_BOOST_ENABLED then return end
+    SPEED_BOOST_ENABLED = false
+    if speedConnection then speedConnection:Disconnect() speedConnection = nil end
+end
+
+-- ==========================================
+-- HEIGHT BYPASS (UNHITTABLE) LOGIC
+-- ==========================================
+local UNHITTABLE_ENABLED = false
+local unhittableThread = nil
+
+local function enableUnhittable()
+    if UNHITTABLE_ENABLED then return end
+    UNHITTABLE_ENABLED = true
+    
+    unhittableThread = task.spawn(function()
+        while UNHITTABLE_ENABLED do
+            local char = player.Character
+            if char then
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    root.Size = Vector3.new(2, 20, 1)
+                    task.wait(0.2)
+                    if not UNHITTABLE_ENABLED then break end
+                    root.Size = Vector3.new(2, 40, 1)
+                    task.wait(2.1)
+                    if not UNHITTABLE_ENABLED then break end
+                    root.Size = Vector3.new(2, 2, 1)
+                    task.wait(1.5)
+                end
+            end
+            task.wait(0.1)
+        end
+        -- Reset size
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            player.Character.HumanoidRootPart.Size = Vector3.new(2, 2, 1)
+        end
+    end)
+end
+
+local function disableUnhittable()
+    UNHITTABLE_ENABLED = false
+    if unhittableThread then task.cancel(unhittableThread) unhittableThread = nil end
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        player.Character.HumanoidRootPart.Size = Vector3.new(2, 2, 1)
+    end
+end
+
+-- ==========================================
+-- TALL MODE LOGIC
+-- ==========================================
+local TALL_MODE_ENABLED = false
+
+local function setTallMode(enabled)
+    TALL_MODE_ENABLED = enabled
+    local char = player.Character
+    if char then
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root then
+            if enabled then
+                root.Size = Vector3.new(2, 10, 1)
+            else
+                root.Size = Vector3.new(2, 2, 1)
+            end
+        end
+    end
+end
+
+-- ==========================================
+-- PLAYER ESP LOGIC
+-- ==========================================
+local PLAYER_ESP_ENABLED = false
+local ESP_SETTINGS = {
+    ShowDistance = true,
+    ShowItems = true,
+    HighlightColor = Color3.fromRGB(255, 0, 0)
+}
+local espConnections = {}
+
+local function createPlayerBillboard(plr)
+    if not plr.Character then return end
+    local head = plr.Character:FindFirstChild("Head")
+    if not head then return end
+    
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "AeroESP"
+    bb.Adornee = head
+    bb.Size = UDim2.new(0, 200, 0, 50)
+    bb.StudsOffset = Vector3.new(0, 2, 0)
+    bb.AlwaysOnTop = true
+    bb.Parent = head
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = plr.Name
+    nameLabel.TextColor3 = Color3.new(1, 1, 1)
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.Parent = bb
+    
+    if ESP_SETTINGS.ShowDistance then
+        local distLabel = Instance.new("TextLabel")
+        distLabel.Size = UDim2.new(1, 0, 0.5, 0)
+        distLabel.Position = UDim2.new(0, 0, 0.5, 0)
+        distLabel.BackgroundTransparency = 1
+        distLabel.TextColor3 = Color3.new(1, 1, 1)
+        distLabel.TextStrokeTransparency = 0
+        distLabel.Parent = bb
+        
+        task.spawn(function()
+            while bb.Parent do
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                    local dist = (player.Character.HumanoidRootPart.Position - plr.Character.HumanoidRootPart.Position).Magnitude
+                    distLabel.Text = math.floor(dist) .. " studs"
+                end
+                task.wait(0.5)
+            end
+        end)
+    end
+end
+
+local function enablePlayerESP()
+    if PLAYER_ESP_ENABLED then return end
+    PLAYER_ESP_ENABLED = true
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player then
+            if plr.Character then
+                -- Highlight
+                local hl = Instance.new("Highlight")
+                hl.Name = "AeroHighlight"
+                hl.FillColor = ESP_SETTINGS.HighlightColor
+                hl.OutlineColor = ESP_SETTINGS.HighlightColor
+                hl.Parent = plr.Character
+                
+                createPlayerBillboard(plr)
+            end
+            
+            espConnections[plr] = plr.CharacterAdded:Connect(function(char)
+                task.wait(0.5)
+                if not PLAYER_ESP_ENABLED then return end
+                local hl = Instance.new("Highlight")
+                hl.Name = "AeroHighlight"
+                hl.FillColor = ESP_SETTINGS.HighlightColor
+                hl.OutlineColor = ESP_SETTINGS.HighlightColor
+                hl.Parent = char
+                createPlayerBillboard(plr)
+            end)
+        end
+    end
+    
+    espConnections.added = Players.PlayerAdded:Connect(function(plr)
+        espConnections[plr] = plr.CharacterAdded:Connect(function(char)
+            task.wait(0.5)
+            if not PLAYER_ESP_ENABLED then return end
+            local hl = Instance.new("Highlight")
+            hl.Name = "AeroHighlight"
+            hl.FillColor = ESP_SETTINGS.HighlightColor
+            hl.OutlineColor = ESP_SETTINGS.HighlightColor
+            hl.Parent = char
+            createPlayerBillboard(plr)
+        end)
+    end)
+end
+
+local function disablePlayerESP()
+    PLAYER_ESP_ENABLED = false
+    if espConnections.added then espConnections.added:Disconnect() end
+    for _, conn in pairs(espConnections) do
+        if typeof(conn) == "RBXScriptConnection" then conn:Disconnect() end
+    end
+    espConnections = {}
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr.Character then
+            local hl = plr.Character:FindFirstChild("AeroHighlight")
+            if hl then hl:Destroy() end
+            local head = plr.Character:FindFirstChild("Head")
+            if head then
+                local bb = head:FindFirstChild("AeroESP")
+                if bb then bb:Destroy() end
+            end
+        end
+    end
+end
+
+-- ==========================================
+-- PLOT ESP LOGIC
+-- ==========================================
+local PLOT_ESP_ENABLED = false
+local PLOT_TIME_ESP_ENABLED = false
+local plotEspFolder = nil
+
+local function getPlotOwner(plot)
+    local sign = plot:FindFirstChild("PlotSign", true)
+    if sign then
+        local label = sign:FindFirstChildWhichIsA("TextLabel", true)
+        if label then return label.Text end
+    end
+    return "Unknown"
+end
+
+local function updatePlotESP()
+    if not plotEspFolder then
+        plotEspFolder = Instance.new("Folder")
+        plotEspFolder.Name = "AeroPlotESP"
+        plotEspFolder.Parent = Workspace
+    end
+    
+    local plots = Workspace:FindFirstChild("Plots")
+    if not plots then return end
+    
+    for _, plot in pairs(plots:GetChildren()) do
+        if plot:IsA("Model") or plot:IsA("Folder") then
+            -- Check if we already have ESP for this plot
+            local existing = plotEspFolder:FindFirstChild(plot.Name)
+            if not existing then
+                local bb = Instance.new("BillboardGui")
+                bb.Name = plot.Name
+                bb.Adornee = plot:FindFirstChild("Spawn") or plot.PrimaryPart
+                bb.Size = UDim2.new(0, 200, 0, 50)
+                bb.AlwaysOnTop = true
+                bb.Parent = plotEspFolder
+                
+                local label = Instance.new("TextLabel")
+                label.Size = UDim2.new(1, 0, 1, 0)
+                label.BackgroundTransparency = 1
+                label.TextColor3 = Color3.new(0, 1, 0)
+                label.TextStrokeTransparency = 0
+                label.Parent = bb
+                
+                task.spawn(function()
+                    while bb.Parent and (PLOT_ESP_ENABLED or PLOT_TIME_ESP_ENABLED) do
+                        local text = ""
+                        if PLOT_ESP_ENABLED then
+                            text = text .. "Owner: " .. getPlotOwner(plot) .. "\n"
+                        end
+                        if PLOT_TIME_ESP_ENABLED then
+                            text = text .. "Time: N/A\n"
+                        end
+                        label.Text = text
+                        task.wait(1)
+                    end
+                    bb:Destroy()
+                end)
+            end
+        end
+    end
+end
+
+local function enablePlotESP()
+    PLOT_ESP_ENABLED = true
+    updatePlotESP()
+end
+
+local function disablePlotESP()
+    PLOT_ESP_ENABLED = false
+end
+
+local function enablePlotTimeESP()
+    PLOT_TIME_ESP_ENABLED = true
+    updatePlotESP()
+end
+
+local function disablePlotTimeESP()
+    PLOT_TIME_ESP_ENABLED = false
+end
+
+-- ==========================================
+-- BRAINROT ESP LOGIC
+-- ==========================================
+local BRAINROT_ESP_ENABLED = false
+local brainrotHighlight = nil
+
+local function parseGen(text)
+    if not text then return 0 end
+    text = text:gsub("%$", ""):gsub("/s", "")
+    local num = tonumber(text:match("[%d%.]+")) or 0
+    local suffix = text:match("[%a]+")
+    local mult = 1
+    if suffix == "K" then mult = 1e3
+    elseif suffix == "M" then mult = 1e6
+    elseif suffix == "B" then mult = 1e9
+    elseif suffix == "T" then mult = 1e12 end
+    return num * mult
+end
+
+local function updateBrainrot()
+    if not BRAINROT_ESP_ENABLED then return end
+    local bestVal = -1
+    local bestObj = nil
+    
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj.Name == "AnimalOverhead" and obj:IsA("BillboardGui") then
+            local gen = obj:FindFirstChild("Generation")
+            if gen and gen:IsA("TextLabel") then
+                local val = parseGen(gen.Text)
+                if val > bestVal then
+                    bestVal = val
+                    bestObj = obj
+                end
+            end
+        end
+    end
+    
+    if bestObj then
+        if brainrotHighlight and brainrotHighlight.Adornee ~= bestObj.Parent then
+            brainrotHighlight:Destroy()
+            brainrotHighlight = nil
+        end
+        
+        if not brainrotHighlight then
+            brainrotHighlight = Instance.new("Highlight")
+            brainrotHighlight.FillColor = Color3.new(1, 0.8, 0) -- Gold
+            brainrotHighlight.Parent = bestObj.Parent
+            brainrotHighlight.Adornee = bestObj.Parent
+        end
+    end
+end
+
+local function enableBrainrotESP()
+    BRAINROT_ESP_ENABLED = true
+    task.spawn(function()
+        while BRAINROT_ESP_ENABLED do
+            updateBrainrot()
+            task.wait(2)
+        end
+        if brainrotHighlight then brainrotHighlight:Destroy() brainrotHighlight = nil end
+    end)
+end
+
+local function disableBrainrotESP()
+    BRAINROT_ESP_ENABLED = false
+end
+
+-- ==========================================
+-- LASER CAPE LOGIC
+-- ==========================================
+local LASER_CAPE_ENABLED = false
+local laserCapeConnection = nil
+
+local function enableLaserCape()
+    if LASER_CAPE_ENABLED then return end
+    LASER_CAPE_ENABLED = true
+    
+    laserCapeConnection = RunService.Heartbeat:Connect(function()
+        if not LASER_CAPE_ENABLED then return end
+        local char = player.Character
+        if not char then return end
+        
+        local cape = char:FindFirstChild("LaserArm")
+        if not cape then 
+            local tool = player.Backpack:FindFirstChild("LaserArm")
+            if tool then tool.Parent = char end
+            return 
+        end
+        
+        if cape:FindFirstChild("RemoteEvent") then
+            local closest = nil
+            local minDst = math.huge
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local dst = (p.Character.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
+                    if dst < minDst then
+                        minDst = dst
+                        closest = p.Character.HumanoidRootPart
+                    end
+                end
+            end
+            
+            if closest then
+                cape.RemoteEvent:FireServer(closest.Position)
+            end
+        end
+    end)
+end
+
+local function disableLaserCape()
+    LASER_CAPE_ENABLED = false
+    if laserCapeConnection then laserCapeConnection:Disconnect() laserCapeConnection = nil end
+end
+
+-- ==========================================
+-- MAP MODS LOGIC
+-- ==========================================
+local function enableMapMods()
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v.Name == "Border" or v.Name == "Barrier" then
+            v:Destroy()
+        end
+    end
+end
+
+-- ==========================================
 -- INVISIBILITY LOGIC
 -- ==========================================
 local function setInvisibility(enabled)
@@ -682,778 +1135,318 @@ end
 
 debugLog("Anti-AFK Enabled", "INFO")
 
--- ========================================== 
--- GUI HELPER FUNCTIONS
--- ========================================== 
-local function new(class, props, parent)
-    local obj = Instance.new(class)
-    if props then
-        for k,v in pairs(props) do
-            if k ~= "Parent" then
-                obj[k] = v
-            end
-        end
-        if props.Parent then obj.Parent = props.Parent end
-    end
-    if parent then obj.Parent = parent end
-    return obj
-end
+-- ==========================================
+-- LUNA UI SETUP
+-- ==========================================
+local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/master/source.lua"))()
 
-local function addHoverEffect(guiObject)
-    if not guiObject then return end
-    local originalPos = guiObject.Position
-    guiObject:SetAttribute("BaseY", originalPos.Y.Offset)
-    guiObject.MouseEnter:Connect(function()
-        local currentY = guiObject:GetAttribute("BaseY") or originalPos.Y.Offset
-        TweenService:Create(guiObject, TweenInfo.new(0.2), {Position = UDim2.new(originalPos.X.Scale, originalPos.X.Offset, originalPos.Y.Scale, currentY + 3)}):Play()
-    end)
-    guiObject.MouseLeave:Connect(function()
-        local currentY = guiObject:GetAttribute("BaseY") or originalPos.Y.Offset
-        TweenService:Create(guiObject, TweenInfo.new(0.2), {Position = UDim2.new(originalPos.X.Scale, originalPos.X.Offset, originalPos.Y.Scale, currentY)}):Play()
-    end)
-end
-
--- UPDATED: Touch Support for Mobile
-local canDrag = false
-local function makeDraggable(frame)
-    local dragging = false
-    local dragStart, startPos
-    local dragSpeed = 0.15
-    
-    local function inputStart(input)
-        if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and (canDrag or frame.Name == "MinimizedIcon") then
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end
-    
-    frame.InputBegan:Connect(inputStart)
-    
-    local dragInput
-    frame.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            local targetPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-            TweenService:Create(frame, TweenInfo.new(dragSpeed), {Position = targetPos}):Play()
-        end
-    end)
-end
-
--- ========================================== 
--- MAIN GUI SETUP
--- ========================================== 
-if game.CoreGui:FindFirstChild("AeroHubUI") then
-    game.CoreGui.AeroHubUI:Destroy()
-end
-
--- Using CoreGui if available (more secure), else PlayerGui
-local parentTarget = game:GetService("CoreGui")
-if not pcall(function() local x = parentTarget.Name end) then
-    parentTarget = playerGui
-end
-
-local screenGui = new("ScreenGui", {Name="AeroHubUI", ResetOnSpawn=false, IgnoreGuiInset=true}, parentTarget)
-
-local minimizedIcon = new("ImageButton", {
-    Name = "MinimizedIcon",
-    Size = UDim2.new(0, 0, 0, 0),
-    Position = UDim2.new(0.1, 0, 0.1, 0),
-    BackgroundColor3 = Color3.fromRGB(20, 20, 30),
-    Image = "rbxassetid://6031280883",
-    ImageColor3 = Color3.fromRGB(120, 80, 255),
-    AutoButtonColor = false,
-    Visible = false,
-    Parent = screenGui,
-    ZIndex = 100
-})
-new("UICorner", {CornerRadius = UDim.new(1, 0)}, minimizedIcon)
-new("UIStroke", {Color = Color3.fromRGB(255, 255, 255), Thickness = 2, Parent = minimizedIcon})
-makeDraggable(minimizedIcon)
-
-local panel = new("Frame", {
-    Name="Panel",
-    Size=UDim2.new(0,500,0,750), -- Increased height again
-    Position=UDim2.new(0.5,0,0.5,-375),
-    AnchorPoint=Vector2.new(0.5, 0),
-    BackgroundColor3=Color3.fromRGB(12,12,20),
-    BorderSizePixel=0,
-    ClipsDescendants=true,
-    ZIndex=50,
-    Parent = screenGui
-})
-new("UICorner", {CornerRadius=UDim.new(0,20)}, panel)
-makeDraggable(panel)
-
-local glow = new("UIStroke", {
-    Color=Color3.fromRGB(120,80,255),
-    Thickness=4,
-    ApplyStrokeMode=Enum.ApplyStrokeMode.Border,
-    LineJoinMode=Enum.LineJoinMode.Round,
-    Parent=panel
+local Window = Luna:CreateWindow({
+    Name = "Aero Hub (Fixed)",
+    Subtitle = "SAB Desync & Exploits",
+    LogoID = "rbxassetid://12345678", -- Placeholder or generic icon
+    LoadingEnabled = true,
+    LoadingTitle = "Aero Hub",
+    LoadingSubtitle = "by Antigravity",
+    ConfigSettings = {
+        RootFolder = nil,
+        ConfigFolder = "AeroHub"
+    }
 })
 
-local hue=0
-RunService.RenderStepped:Connect(function(dt)
-    hue=(hue+dt*0.2)%1
-    glow.Color=Color3.fromHSV(hue,0.9,1)
-    minimizedIcon.ImageColor3 = Color3.fromHSV(hue, 0.9, 1)
-end)
+-- TABS
+local MainTab = Window:CreateTab({ Name = "Main", Icon = "home", ImageSource = "Material" })
+local MovementTab = Window:CreateTab({ Name = "Movement", Icon = "directions_run", ImageSource = "Material" })
+local ExploitsTab = Window:CreateTab({ Name = "Exploits", Icon = "warning", ImageSource = "Material" })
+local VisualsTab = Window:CreateTab({ Name = "Visuals", Icon = "visibility", ImageSource = "Material" })
+local MiscTab = Window:CreateTab({ Name = "Misc", Icon = "settings", ImageSource = "Material" })
 
-local contentElements = {}
+-- MAIN TAB (Desync & Lag Switch)
+MainTab:CreateSection({ Name = "Desync Controls" })
 
-local titleLabel = new("TextLabel", {
-    Text="Aero Hub (Fixed)",
-    Font=Enum.Font.GothamBold,
-    TextSize=16,
-    TextColor3=Color3.fromRGB(200,200,255),
-    BackgroundTransparency=1,
-    Size=UDim2.new(0, 150, 0, 20),
-    Position=UDim2.new(0.5, -75, 0, 12),
-    Parent=panel,
-    ZIndex=60
-})
-addHoverEffect(titleLabel)
-table.insert(contentElements, titleLabel)
-
--- DESYNC SECTION
-local desyncLabel = new("TextLabel", {
-    Text="DeSync",
-    Font=Enum.Font.GothamBold,
-    TextSize=28,
-    TextColor3=Color3.fromRGB(255,0,255),
-    BackgroundTransparency=1,
-    Size=UDim2.new(1,0,0,40),
-    Position=UDim2.new(0,0,0.08,0),
-    TextScaled=false,
-    Parent=panel,
-    ZIndex=60
-})
-addHoverEffect(desyncLabel)
-table.insert(contentElements, desyncLabel)
-
-local hueLabel=0
-RunService.RenderStepped:Connect(function(dt)
-    hueLabel=(hueLabel+dt*0.5)%1
-    desyncLabel.TextColor3=Color3.fromHSV(hueLabel,0.9,1)
-end)
-
-local toggleFrame = new("Frame", {
-    Size=UDim2.new(0,120,0,60),
-    BackgroundColor3=Color3.fromRGB(40,40,60),
-    Position=UDim2.new(0.5,-60,0.15,0),
-    Parent=panel,
-    ZIndex=60
-})
-new("UICorner", {CornerRadius=UDim.new(0,30)}, toggleFrame)
-table.insert(contentElements, toggleFrame)
-
-local knob = new("Frame", {
-    Size=UDim2.new(0,56,0,56),
-    Position=UDim2.new(0,4,0,2),
-    BackgroundColor3=Color3.fromRGB(255,255,255),
-    Parent=toggleFrame,
-    ZIndex=61
-})
-new("UICorner", {CornerRadius=UDim.new(1,0)}, knob)
-
-local symbol = new("TextLabel", {
-    Text="X",
-    Font=Enum.Font.GothamBlack,
-    TextSize=32,
-    TextColor3=Color3.fromRGB(255,50,50),
-    BackgroundTransparency=1,
-    AnchorPoint=Vector2.new(0.5, 0.5),
-    Position=UDim2.new(0.5, 0, 0.5, 0),
-    Size=UDim2.new(1,0,1,0),
-    Rotation=0,
-    Parent=knob,
-    ZIndex=62
-})
-addHoverEffect(symbol)
-
--- VISUALIZER SECTION
-local visLabel = new("TextLabel", {
-    Text="Visualize Pos",
-    Font=Enum.Font.GothamBold,
-    TextSize=24,
-    TextColor3=Color3.fromRGB(100,255,255),
-    BackgroundTransparency=1,
-    Size=UDim2.new(1,0,0,30),
-    Position=UDim2.new(0,0,0.28,0),
-    TextScaled=false,
-    Parent=panel,
-    ZIndex=60
-})
-addHoverEffect(visLabel)
-table.insert(contentElements, visLabel)
-
-local visToggleFrame = new("Frame", {
-    Size=UDim2.new(0,100,0,50),
-    BackgroundColor3=Color3.fromRGB(40,40,60),
-    Position=UDim2.new(0.5,-50,0.34,0),
-    Parent=panel,
-    ZIndex=60
-})
-new("UICorner", {CornerRadius=UDim.new(0,25)}, visToggleFrame)
-table.insert(contentElements, visToggleFrame)
-
-local visKnob = new("Frame", {
-    Size=UDim2.new(0,46,0,46),
-    Position=UDim2.new(0,2,0,2),
-    BackgroundColor3=Color3.fromRGB(255,255,255),
-    Parent=visToggleFrame,
-    ZIndex=61
-})
-new("UICorner", {CornerRadius=UDim.new(1,0)}, visKnob) -- Vis Symbol
-local visSymbol = new("TextLabel", {
-    Text="X",
-    Font=Enum.Font.GothamBlack,
-    TextSize=24,
-    TextColor3=Color3.fromRGB(255,50,50),
-    BackgroundTransparency=1,
-    AnchorPoint=Vector2.new(0.5, 0.5),
-    Position=UDim2.new(0.5, 0, 0.5, 0),
-    Size=UDim2.new(1,0,1,0),
-    Rotation=0,
-    Parent=visKnob,
-    ZIndex=62
-})
-addHoverEffect(visSymbol)
-
--- 3. LAG SWITCH SECTION
--- Label
-local lagLabel = new("TextLabel",{ Text="Lag Switch (Freeze)", Font=Enum.Font.GothamBold, TextSize=24, TextColor3=Color3.fromRGB(255,100,100), BackgroundTransparency=1, Size=UDim2.new(1,0,0,30), Position=UDim2.new(0,0,0.45,0), TextScaled=false, Parent=panel, ZIndex=60 })
-addHoverEffect(lagLabel)
-table.insert(contentElements, lagLabel)
-
--- Lag Toggle Frame
-local lagToggleFrame = new("Frame",{ Size=UDim2.new(0,100,0,50), BackgroundColor3=Color3.fromRGB(40,40,60), Position=UDim2.new(0.5,-50,0.51,0), Parent=panel, ZIndex=60 })
-new("UICorner",{CornerRadius=UDim.new(0,25)}, lagToggleFrame)
-table.insert(contentElements, lagToggleFrame)
-
--- Lag Knob
-local lagKnob = new("Frame",{ Size=UDim2.new(0,46,0,46), Position=UDim2.new(0,2,0,2), BackgroundColor3=Color3.fromRGB(255,255,255), Parent=lagToggleFrame, ZIndex=61 })
-new("UICorner",{CornerRadius=UDim.new(1,0)}, lagKnob)
-
--- Lag Symbol
-local lagSymbol = new("TextLabel",{ Text="X", Font=Enum.Font.GothamBlack, TextSize=24, TextColor3=Color3.fromRGB(255,50,50), BackgroundTransparency=1, AnchorPoint=Vector2.new(0.5, 0.5), Position=UDim2.new(0.5, 0, 0.5, 0), Size=UDim2.new(1,0,1,0), Rotation=0, Parent=lagKnob, ZIndex=62 })
-addHoverEffect(lagSymbol)
-
-
--- MOVEMENT SECTION
-local moveLabel = new("TextLabel", {
-    Text="Movement & Tools",
-    Font=Enum.Font.GothamBold,
-    TextSize=24,
-    TextColor3=Color3.fromRGB(50,255,100),
-    BackgroundTransparency=1,
-    Size=UDim2.new(1,0,0,30),
-    Position=UDim2.new(0,0,0.62,0),
-    TextScaled=false,
-    Parent=panel,
-    ZIndex=60
-})
-addHoverEffect(moveLabel)
-table.insert(contentElements, moveLabel)
-
--- Helper for small toggles
-local function createSmallToggle(text, pos, callback)
-    local frame = new("Frame", {
-        Size=UDim2.new(0, 140, 0, 40),
-        Position=pos,
-        BackgroundColor3=Color3.fromRGB(30,30,40),
-        Parent=panel,
-        ZIndex=60
-    })
-    new("UICorner", {CornerRadius=UDim.new(0,10)}, frame)
-    
-    local label = new("TextLabel", {
-        Text=text,
-        Font=Enum.Font.GothamBold,
-        TextSize=14,
-        TextColor3=Color3.fromRGB(200,200,200),
-        BackgroundTransparency=1,
-        Size=UDim2.new(0.7, 0, 1, 0),
-        Position=UDim2.new(0, 10, 0, 0),
-        TextXAlignment=Enum.TextXAlignment.Left,
-        Parent=frame,
-        ZIndex=61
-    })
-    
-    local toggleBtn = new("Frame", {
-        Size=UDim2.new(0, 30, 0, 30),
-        Position=UDim2.new(1, -35, 0.5, -15),
-        BackgroundColor3=Color3.fromRGB(50,50,50),
-        Parent=frame,
-        ZIndex=61
-    })
-    new("UICorner", {CornerRadius=UDim.new(0,8)}, toggleBtn)
-    
-    local state = false
-    local function update()
-        state = not state
-        local targetColor = state and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(50,50,50)
-        TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3=targetColor}):Play()
-        callback(state)
-    end
-    
-    frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            update()
-        end
-    end)
-    
-    return frame
-end
-
--- Toggles
-createSmallToggle("Spin Bot", UDim2.new(0.1, 0, 0.68, 0), function(s) if s then enableHelicopter() else disableHelicopter() end end)
-createSmallToggle("Platform", UDim2.new(0.55, 0, 0.68, 0), function(s) if s then enablePlatform() else disablePlatform() end end)
-createSmallToggle("Grapple Fly", UDim2.new(0.1, 0, 0.76, 0), function(s) if s then enableGrappleFlight() else disableGrappleFlight() end end)
-
--- New Exploits Toggles
-createSmallToggle("Fling (Patched)", UDim2.new(0.55, 0, 0.76, 0), function(s) if s then enableFling() else disableFling() end end)
-createSmallToggle("Invisibility", UDim2.new(0.1, 0, 0.84, 0), function(s) setInvisibility(s) end)
-createSmallToggle("Mobile Desync", UDim2.new(0.55, 0, 0.84, 0), function(s) if s then enableMobileDesync() else disableMobileDesync() end end)
-createSmallToggle("Ragdoll Desync", UDim2.new(0.1, 0, 0.92, 0), function(s) if s then enableRagdollDesync() else disableRagdollDesync() end end)
-
--- Server Hop Buttons
-local function createButton(text, pos, color, callback)
-    local btn = new("TextButton", {
-        Text=text,
-        Font=Enum.Font.GothamBold,
-        TextSize=12,
-        TextColor3=Color3.fromRGB(255,255,255),
-        BackgroundColor3=color,
-        Size=UDim2.new(0, 90, 0, 30),
-        Position=pos,
-        Parent=panel,
-        AutoButtonColor=true,
-        ZIndex=60
-    })
-    new("UICorner", {CornerRadius=UDim.new(0,8)}, btn)
-    btn.MouseButton1Click:Connect(callback)
-    return btn
-end
-
-createButton("Big Server", UDim2.new(0.55, 0, 0.92, 0), Color3.fromRGB(100, 100, 200), joinBiggestServer)
-createButton("Small Server", UDim2.new(0.75, 0, 0.92, 0), Color3.fromRGB(100, 200, 100), joinSmallestServer)
-createButton("Rejoin", UDim2.new(0.55, 0, 0.98, 0), Color3.fromRGB(200, 100, 100), rejoinServer)
-
-local noteLabel = new("TextLabel", {
-    Text="Server sees your 'Clone' (Blue Ghost)\nYou move freely.",
-    Font=Enum.Font.Gotham,
-    TextSize=12,
-    TextColor3=Color3.fromRGB(150, 150, 160),
-    BackgroundTransparency=1,
-    Size=UDim2.new(0, 400, 0, 20),
-    Position=UDim2.new(0.5, 0, 1.05, 0), -- Moved down further
-    AnchorPoint=Vector2.new(0.5, 0),
-    Parent=panel,
-    ZIndex=60
-})
-table.insert(contentElements, noteLabel)
-
--- TOGGLE LOGIC
-local isOn = false
-local isAnimating = false
-
-local function clearUnwantedScripts(char)
-    for _, script in ipairs(char:GetDescendants()) do
-        if script:IsA("Script") or script:IsA("LocalScript") then
-            script:Destroy()
-        end
-    end
-end
-
-local function toggle()
-    if isAnimating or not canDrag then return end
-    isAnimating = true
-    isOn = not isOn
-    
-    -- UPDATE DESYNC STATE AND CLONE ILLUSION
-    if isOn and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        local pos = player.Character.HumanoidRootPart.Position
-        LocalDesyncPos = pos
-        debugLog("Desync Toggled ON. Position: " .. tostring(pos), "INFO")
-        clearUnwantedScripts(player.Character)
-        
-        if getgenv then
-            getgenv().DesyncEnabled = true
-            getgenv().DesyncPosition = pos
-        end
-        
-        -- >>> START CLONE ILLUSION
-        local success, err = pcall(startIllusion) 
-        if not success then debugLog("Error starting illusion: " .. tostring(err), "ERROR") end
-        
-    else
-        LocalDesyncPos = nil
-        debugLog("Desync Toggled OFF", "INFO")
-        
-        if getgenv then
-            getgenv().DesyncEnabled = false
-            getgenv().DesyncPosition = nil
-            pcall(stopIllusion) 
-        end
-    end
-    
-    local targetPos = isOn and UDim2.new(1, -60, 0, 2) or UDim2.new(0, 4, 0, 2)
-    TweenService:Create(knob, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position=targetPos}):Play()
-    
-    local targetColor = isOn and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(40, 40, 60)
-    TweenService:Create(toggleFrame, TweenInfo.new(0.4), {BackgroundColor3=targetColor}):Play()
-    
-    local spinTween = TweenService:Create(symbol, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Rotation = symbol.Rotation + 360})
-    spinTween:Play()
-    
-    task.delay(0.2, function()
-        symbol.Text = isOn and "✔️" or "X"
-        symbol.TextColor3 = isOn and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(255, 50, 50)
-    end)
-    
-    spinTween.Completed:Wait()
-    isAnimating = false
-end
-
-local function connectToggle(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        toggle()
-    end
-end
-
-toggleFrame.InputBegan:Connect(connectToggle)
-knob.InputBegan:Connect(connectToggle)
-symbol.InputBegan:Connect(connectToggle)
-
--- VISUALIZER LOGIC
-local isVisOn = false
-local isVisAnimating = false
-local visualizerPart = nil
-
-local function updateVisualizer()
-    if not isVisOn then
-        if visualizerPart then
-            visualizerPart:Destroy()
-            visualizerPart = nil
-        end
-        return
-    end
-    
-    if not visualizerPart then
-        visualizerPart = Instance.new("Part")
-        visualizerPart.Name = "DesyncVisualizer"
-        visualizerPart.Shape = Enum.PartType.Ball
-        visualizerPart.Size = Vector3.new(2, 2, 2)
-        visualizerPart.Color = Color3.fromRGB(0, 255, 255)
-        visualizerPart.Material = Enum.Material.Neon
-        visualizerPart.Transparency = 0.3
-        visualizerPart.Anchored = true
-        visualizerPart.CanCollide = false
-        visualizerPart.CastShadow = false
-        visualizerPart.Parent = Workspace
-    end
-    
-    local targetPos = nil
-    if getgenv and getgenv().DesyncPosition then
-        targetPos = getgenv().DesyncPosition
-    end
-    
-    if not targetPos and LocalClone and LocalClone.PrimaryPart then
-        targetPos = LocalClone.PrimaryPart.Position
-    end
-    
-    if not targetPos and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        targetPos = player.Character.HumanoidRootPart.Position
-    end
-    
-    if targetPos then
-        visualizerPart.Position = targetPos
-    end
-end
-
-RunService.RenderStepped:Connect(function()
-    pcall(updateVisualizer)
-end)
-
-local function toggleVis()
-    if isVisAnimating or not canDrag then return end
-    isVisAnimating = true
-    isVisOn = not isVisOn
-    
-    local targetPos = isVisOn and UDim2.new(1, -48, 0, 2) or UDim2.new(0, 2, 0, 2)
-    TweenService:Create(visKnob, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position=targetPos}):Play()
-    
-    local targetColor = isVisOn and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(40, 40, 60)
-    TweenService:Create(visToggleFrame, TweenInfo.new(0.4), {BackgroundColor3=targetColor}):Play()
-    
-    local spinTween = TweenService:Create(visSymbol, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Rotation = visSymbol.Rotation + 360})
-    spinTween:Play()
-    
-    task.delay(0.2, function()
-        visSymbol.Text = isVisOn and "✔️" or "X"
-        visSymbol.TextColor3 = isVisOn and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(255, 50, 50)
-    end)
-    
-    spinTween.Completed:Wait()
-    isVisAnimating = false
-end
-
-local function connectVisToggle(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        toggleVis()
-    end
-end
-
-visToggleFrame.InputBegan:Connect(connectVisToggle)
-visKnob.InputBegan:Connect(connectVisToggle)
-visSymbol.InputBegan:Connect(connectVisToggle)
-
--- LAG SWITCH LOGIC
-local isLagOn = false
-local isLagAnimating = false
-
-local function toggleLag()
-    if isLagAnimating or not canDrag then return end
-    isLagAnimating = true
-    isLagOn = not isLagOn
-    
-    debugLog("Lag Switch Toggled: " .. tostring(isLagOn), "INFO")
-    
-    if isLagOn then
-        -- Enable Lag (Freeze)
-        if settings() and settings().Network then
-            settings().Network.IncomingReplicationLag = 10000 -- High lag
-        end
-    else
-        -- Disable Lag (Unfreeze)
-        if settings() and settings().Network then
-            settings().Network.IncomingReplicationLag = 0
-        end
-    end
-    
-    local targetPos = isLagOn and UDim2.new(1, -48, 0, 2) or UDim2.new(0, 2, 0, 2)
-    TweenService:Create(lagKnob, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position=targetPos}):Play()
-    local targetColor = isLagOn and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(40, 40, 60)
-    TweenService:Create(lagToggleFrame, TweenInfo.new(0.4), {BackgroundColor3=targetColor}):Play()
-    local spinTween = TweenService:Create(lagSymbol, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Rotation = lagSymbol.Rotation + 360})
-    spinTween:Play()
-    task.delay(0.2, function()
-        lagSymbol.Text = isLagOn and "✔️" or "X"
-        lagSymbol.TextColor3 = isLagOn and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(255, 50, 50)
-    end)
-    spinTween.Completed:Wait()
-    isLagAnimating = false
-end
-local function connectLagToggle(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then toggleLag() end
-end
-lagToggleFrame.InputBegan:Connect(connectLagToggle)
-lagKnob.InputBegan:Connect(connectLagToggle)
-lagSymbol.InputBegan:Connect(connectLagToggle)
-
-
--- TOP BAR BUTTONS
-local topBar = new("Frame", {
-    Size=UDim2.new(1,0,0,50),
-    BackgroundTransparency=1,
-    Parent=panel,
-    ZIndex=70
-})
-
-local minBtn = new("TextButton", {
-    Text="-",
-    Font=Enum.Font.GothamBlack,
-    TextSize=24,
-    TextColor3=Color3.fromRGB(50, 50, 50),
-    BackgroundColor3=Color3.fromRGB(255, 220, 50),
-    Size=UDim2.new(0,30,0,30),
-    Position=UDim2.new(1,-80,0,10),
-    Parent=topBar,
-    AutoButtonColor = true,
-    ZIndex=71
-})
-new("UICorner", {CornerRadius=UDim.new(1,0)}, minBtn)
-addHoverEffect(minBtn)
-table.insert(contentElements, minBtn)
-
-local closeBtn = new("TextButton", {
-    Text="X",
-    Font=Enum.Font.GothamBlack,
-    TextSize=18,
-    TextColor3=Color3.fromRGB(255, 255, 255),
-    BackgroundColor3=Color3.fromRGB(255, 80, 80),
-    Size=UDim2.new(0,30,0,30),
-    Position=UDim2.new(1,-40,0,10),
-    Parent=topBar,
-    AutoButtonColor = true,
-    ZIndex=71
-})
-new("UICorner", {CornerRadius=UDim.new(1,0)}, closeBtn)
-addHoverEffect(closeBtn)
-table.insert(contentElements, closeBtn)
-
-local fpsLabel = new("TextLabel", {
-    Text="FPS: 0",
-    Font=Enum.Font.GothamBold,
-    TextSize=18,
-    TextColor3=Color3.fromRGB(255,255,255),
-    BackgroundTransparency=1,
-    Size=UDim2.new(0,100,0,30),
-    Position=UDim2.new(0.5,-50,1,-40),
-    Parent=panel,
-    ZIndex=60
-})
-addHoverEffect(fpsLabel)
-table.insert(contentElements, fpsLabel)
-
-local lastFrame=os.clock()
-local frameCount=0
-RunService.RenderStepped:Connect(function()
-    frameCount=frameCount+1
-    if os.clock()-lastFrame>=1 then
-        fpsLabel.Text="FPS: "..frameCount
-        frameCount=0
-        lastFrame=os.clock()
-    end
-end)
-
--- MINIMIZE / CLOSE LOGIC
-local function restorePanel()
-    TweenService:Create(minimizedIcon, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0,0,0,0)}):Play()
-    task.wait(0.3)
-    minimizedIcon.Visible = false
-    panel.Visible = true
-    panel.Size = UDim2.new(0,0,0,0)
-    TweenService:Create(panel, TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), {Size = UDim2.new(0,500,0,450)}):Play()
-end
-
-local function minimizePanel()
-    TweenService:Create(panel, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0,0,0,0)}):Play()
-    task.wait(0.3)
-    panel.Visible = false
-    minimizedIcon.Visible = true
-    TweenService:Create(minimizedIcon, TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), {Size = UDim2.new(0,50,0,50)}):Play()
-end
-
-minBtn.MouseButton1Click:Connect(minimizePanel)
-minimizedIcon.MouseButton1Click:Connect(restorePanel)
-
-closeBtn.MouseButton1Click:Connect(function()
-    pcall(stopIllusion)
-    TweenService:Create(panel, TweenInfo.new(0.3), {Size=UDim2.new(0,0,0,0), BackgroundTransparency=1}):Play()
-    TweenService:Create(minimizedIcon, TweenInfo.new(0.3), {Size=UDim2.new(0,0,0,0)}):Play()
-    task.wait(0.3)
-    screenGui:Destroy()
-    if visualizerPart then
-        visualizerPart:Destroy()
-    end
-end)
-
--- PARTICLES
-local particleContainer = new("Frame", {
-    Name = "ParticleLayer",
-    Size = UDim2.new(1, 0, 1, 0),
-    BackgroundTransparency = 1,
-    ClipsDescendants = true,
-    ZIndex = 51,
-    Parent = panel
-})
-
-local function spawnParticle()
-    local dotSize = 4
-    local startX = math.random(12, 488)
-    local startYScale = 1.05
-    local dot = new("Frame", {
-        Size = UDim2.new(0, dotSize, 0, dotSize),
-        Position = UDim2.new(0, startX, startYScale, 0),
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        BackgroundTransparency = 0,
-        BorderSizePixel = 0,
-        ZIndex = 52,
-        Parent = particleContainer
-    })
-    new("UICorner", {CornerRadius = UDim.new(1, 0)}, dot)
-    
-    local blur = new("ImageLabel", {
-        Size = UDim2.new(0, 12, 0, 12),
-        Position = UDim2.new(0, startX-4, startYScale, 0),
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://4818765533",
-        ImageColor3 = Color3.new(1, 1, 1),
-        ImageTransparency = 0.7,
-        ZIndex = 52,
-        Parent = particleContainer
-    })
-    
-    local lifetime = math.random(6, 8)
-    local driftX = math.random(-13, 13)
-    local endY = 0.25
-    
-    TweenService:Create(dot, TweenInfo.new(lifetime, Enum.EasingStyle.Linear), {
-        Position = UDim2.new(0, startX + driftX, endY, 0),
-        BackgroundTransparency = 1
-    }):Play()
-    
-    TweenService:Create(blur, TweenInfo.new(lifetime, Enum.EasingStyle.Linear), {
-        Position = UDim2.new(0, startX + driftX - 4, endY, 0),
-        ImageTransparency = 1
-    }):Play()
-    
-    task.delay(lifetime, function()
-        if dot and dot.Parent then dot:Destroy() end
-        if blur and blur.Parent then blur:Destroy() end
-    end)
-end
-
-task.spawn(function()
-    while screenGui and screenGui.Parent do
-        if panel.Visible then
-            spawnParticle()
-            task.wait(math.random(900, 1500) / 1000)
+MainTab:CreateToggle({
+    Name = "Enable Desync (Illusion)",
+    Description = "Freezes your server position while allowing client movement.",
+    CurrentValue = false,
+    Flag = "DesyncToggle",
+    Callback = function(Value)
+        if Value then
+            startIllusion()
         else
-            task.wait(0.5)
+            stopIllusion()
         end
     end
-end)
+})
 
--- INTRO ANIMATION
-task.spawn(function()
-    panel.Size = UDim2.new(0,0,0,0)
-    panel.Visible = true
-    for _, element in ipairs(contentElements) do
-        if element:IsA("TextLabel") or element:IsA("TextButton") then
-            element.TextTransparency = 1
-        end
-        if element:IsA("Frame") or element:IsA("TextButton") then
-            element.BackgroundTransparency = 1
+MainTab:CreateSection({ Name = "Network Manipulation" })
+
+MainTab:CreateToggle({
+    Name = "Lag Switch (Freeze)",
+    Description = "Simulates extreme lag to freeze your character.",
+    CurrentValue = false,
+    Flag = "LagSwitchToggle",
+    Callback = function(Value)
+        _G.LagSwitchEnabled = Value
+    end
+})
+
+-- MOVEMENT TAB
+MovementTab:CreateSection({ Name = "Movement Tools" })
+
+MovementTab:CreateToggle({
+    Name = "Spin Bot (Helicopter)",
+    Description = "Spins rapidly and flings nearby players.",
+    CurrentValue = false,
+    Flag = "SpinBotToggle",
+    Callback = function(Value)
+        if Value then enableHelicopter() else disableHelicopter() end
+    end
+})
+
+MovementTab:CreateToggle({
+    Name = "Platform (Rise)",
+    Description = "Creates a rising platform under you.",
+    CurrentValue = false,
+    Flag = "PlatformToggle",
+    Callback = function(Value)
+        if Value then enablePlatform() else disablePlatform() end
+    end
+})
+
+MovementTab:CreateToggle({
+    Name = "Grapple Fly",
+    Description = "Fly freely using WASD/Space/Shift.",
+    CurrentValue = false,
+    Flag = "GrappleFlyToggle",
+    Callback = function(Value)
+        if Value then enableGrappleFlight() else disableGrappleFlight() end
+    end
+})
+
+MovementTab:CreateSection({ Name = "Modifiers" })
+
+MovementTab:CreateToggle({
+    Name = "Jump Bypass",
+    Description = "Modifies your jump power.",
+    CurrentValue = false,
+    Flag = "JumpBypassToggle",
+    Callback = function(Value)
+        if Value then enableJumpBypass() else disableJumpBypass() end
+    end
+})
+
+MovementTab:CreateSlider({
+    Name = "Jump Power",
+    Range = {0, 500},
+    Increment = 1,
+    Suffix = "Power",
+    CurrentValue = 50,
+    Flag = "JumpPowerSlider",
+    Callback = function(Value)
+        JUMP_POWER = Value
+        if JUMP_BYPASS_ENABLED and player.Character then
+            local hum = player.Character:FindFirstChild("Humanoid")
+            if hum then hum.JumpPower = Value end
         end
     end
-    task.wait(0.2)
-    local panelTween = TweenService:Create(panel, TweenInfo.new(0.8, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), {Size = UDim2.new(0, 500, 0, 450)})
-    panelTween:Play()
-    panelTween.Completed:Wait()
-    for _, element in ipairs(contentElements) do
-        if element:IsA("TextLabel") or element:IsA("TextButton") then
-            TweenService:Create(element, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
-        end
-        if element == toggleFrame or element == visToggleFrame or element == lagToggleFrame or element == minBtn or element == closeBtn then 
-            TweenService:Create(element, TweenInfo.new(0.5), {BackgroundTransparency = 0}):Play() 
-        end
-        task.wait(0.1)
+})
+
+MovementTab:CreateToggle({
+    Name = "Speed Boost",
+    Description = "Increases your movement speed.",
+    CurrentValue = false,
+    Flag = "SpeedBoostToggle",
+    Callback = function(Value)
+        if Value then enableSpeedBoost() else disableSpeedBoost() end
     end
-    canDrag = true
-end)
+})
+
+MovementTab:CreateSlider({
+    Name = "Speed",
+    Range = {16, 200},
+    Increment = 1,
+    Suffix = "Studs/s",
+    CurrentValue = 16,
+    Flag = "SpeedSlider",
+    Callback = function(Value)
+        SPEED_VAL = Value
+    end
+})
+
+MovementTab:CreateToggle({
+    Name = "Height Bypass (Unhittable)",
+    Description = "Cyclically resizes character to avoid hitboxes.",
+    CurrentValue = false,
+    Flag = "HeightBypassToggle",
+    Callback = function(Value)
+        if Value then enableUnhittable() else disableUnhittable() end
+    end
+})
+
+MovementTab:CreateToggle({
+    Name = "Tall Mode",
+    Description = "Makes your character extremely tall.",
+    CurrentValue = false,
+    Flag = "TallModeToggle",
+    Callback = function(Value)
+        setTallMode(Value)
+    end
+})
+
+-- EXPLOITS TAB
+ExploitsTab:CreateSection({ Name = "Advanced Exploits" })
+
+ExploitsTab:CreateToggle({
+    Name = "Fling (Patched)",
+    Description = "Aggressive fling using CFrame spoofing.",
+    CurrentValue = false,
+    Flag = "FlingToggle",
+    Callback = function(Value)
+        if Value then enableFling() else disableFling() end
+    end
+})
+
+ExploitsTab:CreateToggle({
+    Name = "Invisibility",
+    Description = "Makes you invisible to others.",
+    CurrentValue = false,
+    Flag = "InvisibilityToggle",
+    Callback = function(Value)
+        setInvisibility(Value)
+    end
+})
+
+ExploitsTab:CreateSection({ Name = "Desync Variants" })
+
+ExploitsTab:CreateToggle({
+    Name = "Mobile Desync",
+    Description = "Uses FastFlags to simulate mobile lag (Executor dependent).",
+    CurrentValue = false,
+    Flag = "MobileDesyncToggle",
+    Callback = function(Value)
+        if Value then enableMobileDesync() else disableMobileDesync() end
+    end
+})
+
+ExploitsTab:CreateToggle({
+    Name = "Ragdoll Desync",
+    Description = "Prevents ragdolling (Anti-Ragdoll).",
+    CurrentValue = false,
+    Flag = "RagdollDesyncToggle",
+    Callback = function(Value)
+        if Value then enableRagdollDesync() else disableRagdollDesync() end
+    end
+})
+
+-- VISUALS TAB
+VisualsTab:CreateSection({ Name = "Visualizers" })
+
+VisualsTab:CreateToggle({
+    Name = "Show Ghost (Visualizer)",
+    Description = "Shows a blue clone where the server thinks you are.",
+    CurrentValue = false, -- Default OFF to avoid "copies" confusion
+    Flag = "VisualizerToggle",
+    Callback = function(Value)
+        _G.VisualizerEnabled = Value
+        if not Value and _G.VisualizerPart then
+            _G.VisualizerPart:Destroy()
+            _G.VisualizerPart = nil
+        end
+    end
+})
+
+VisualsTab:CreateSection({ Name = "ESP Features" })
+
+VisualsTab:CreateToggle({
+    Name = "Player ESP",
+    Description = "Highlights players and shows info.",
+    CurrentValue = false,
+    Flag = "PlayerESPToggle",
+    Callback = function(Value)
+        if Value then enablePlayerESP() else disablePlayerESP() end
+    end
+})
+
+VisualsTab:CreateToggle({
+    Name = "Plot ESP",
+    Description = "Shows plot owner info.",
+    CurrentValue = false,
+    Flag = "PlotESPToggle",
+    Callback = function(Value)
+        if Value then enablePlotESP() else disablePlotESP() end
+    end
+})
+
+VisualsTab:CreateToggle({
+    Name = "Plot Time ESP",
+    Description = "Shows plot time info.",
+    CurrentValue = false,
+    Flag = "PlotTimeESPToggle",
+    Callback = function(Value)
+        if Value then enablePlotTimeESP() else disablePlotTimeESP() end
+    end
+})
+
+VisualsTab:CreateToggle({
+    Name = "Brainrot ESP",
+    Description = "Highlights highest value generation.",
+    CurrentValue = false,
+    Flag = "BrainrotESPToggle",
+    Callback = function(Value)
+        if Value then enableBrainrotESP() else disableBrainrotESP() end
+    end
+})
+
+-- MISC TAB
+MiscTab:CreateSection({ Name = "Utilities" })
+
+MiscTab:CreateToggle({
+    Name = "Anti-Kick",
+    Description = "Prevents being kicked for idleness.",
+    CurrentValue = true,
+    Flag = "AntiKickToggle",
+    Callback = function(Value)
+        ANTI_KICK_ENABLED = Value
+    end
+})
+
+MiscTab:CreateToggle({
+    Name = "Laser Cape Auto-Fire",
+    Description = "Automatically fires Laser Cape at nearby players.",
+    CurrentValue = false,
+    Flag = "LaserCapeToggle",
+    Callback = function(Value)
+        if Value then enableLaserCape() else disableLaserCape() end
+    end
+})
+
+MiscTab:CreateButton({
+    Name = "Delete Map Borders",
+    Callback = function()
+        enableMapMods()
+    end
+})
+
+MiscTab:CreateSection({ Name = "Server Hopping" })
+
+MiscTab:CreateButton({
+    Name = "Join Biggest Server",
+    Callback = function()
+        joinBiggestServer()
+    end
+})
+
+MiscTab:CreateButton({
+    Name = "Join Smallest Server",
+    Callback = function()
+        joinSmallestServer()
+    end
+})
+
+MiscTab:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        rejoinServer()
+    end
+})
+
+Luna:LoadAutoloadConfig()
