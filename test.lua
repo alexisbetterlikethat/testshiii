@@ -6,12 +6,18 @@ local Window = Luna:CreateWindow({
     LogoID = "6031097225",
     LoadingEnabled = true,
     LoadingTitle = "Aero Hub",
-    LoadingSubtitle = "Loading Ultimate Script...",
+    LoadingSubtitle = "made with love...",
     ConfigSettings = {
         RootFolder = nil,
         ConfigFolder = "AeroHub-BloxFruits-Ultimate"
     },
     KeySystem = false
+})
+
+Window:CreateHomeTab({
+    SupportedExecutors = {"Synapse Z", "Solara", "Fluxus", "Delta"},
+    DiscordInvite = "aerohub",
+    Icon = 1
 })
 
 -- Global Settings
@@ -26,6 +32,7 @@ _G.Settings = {
         ["Auto Elite Hunter"] = false,
         ["Auto Farm Mastery"] = false,
         ["Mastery Health Threshold"] = 25,
+        ["Mastery Weapon"] = "Blox Fruit",
     },
     Raid = {
         ["Auto Start Raid"] = false,
@@ -87,6 +94,7 @@ local CurrentWorld = (game.PlaceId == 2753915549 and 1)
     or (game.PlaceId == 7449423635 and 3)
 local fireclickdetectorFn = rawget(_G, "fireclickdetector")
 local firetouchinterestFn = rawget(_G, "firetouchinterest")
+local activeTween
 
 local function AutoChooseTeam()
     if not _G.Settings.Teams["Auto Select Team"] then return end
@@ -167,6 +175,47 @@ local function GetWeaponByType(type)
     return nil
 end
 
+local function EquipWeaponByType(weaponType)
+    local Character = LocalPlayer.Character
+    if not Character or not Character:FindFirstChildOfClass("Humanoid") then return false end
+    local weaponName = GetWeaponByType(weaponType) or weaponType
+    if weaponName then
+        if Character:FindFirstChild(weaponName) then return true end
+        EquipWeapon(weaponName)
+        if Character:FindFirstChild(weaponName) then return true end
+    end
+    local Backpack = LocalPlayer.Backpack
+    if Backpack then
+        local fallback = Backpack:FindFirstChildOfClass("Tool")
+        if fallback then
+            Character.Humanoid:EquipTool(fallback)
+            return true
+        end
+    end
+    return false
+end
+
+local function EquipPreferredWeapon()
+    return EquipWeaponByType(_G.Settings.Configs["Select Weapon"])
+end
+
+local function EquipMasteryWeapon()
+    return EquipWeaponByType(_G.Settings.Main["Mastery Weapon"])
+end
+
+local lastBasicAttack = 0
+local function PerformBasicAttack()
+    if os.clock() - lastBasicAttack < 0.15 then return end
+    lastBasicAttack = os.clock()
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:Button1Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        task.delay(0.05, function()
+            VirtualUser:Button1Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        end)
+    end)
+end
+
 local function toTarget(targetPos)
     if not targetPos then return end
     local targetCFrame
@@ -187,7 +236,14 @@ local function toTarget(targetPos)
     if Distance > 1000 then Speed = 350 end 
 
     local TweenInfo = TweenInfo.new(Distance / Speed, Enum.EasingStyle.Linear)
+    if activeTween then activeTween:Cancel() end
     local Tween = TweenService:Create(RootPart, TweenInfo, {CFrame = targetCFrame})
+    activeTween = Tween
+    Tween.Completed:Connect(function()
+        if activeTween == Tween then
+            activeTween = nil
+        end
+    end)
     
     if Character:FindFirstChild("Humanoid") then Character.Humanoid.Sit = true end
     
@@ -335,6 +391,20 @@ local function GetQuestData(level)
     return bestQuest
 end
 
+local TravelLookup = {}
+local TravelOptions = {}
+for _, quest in ipairs(QuestDatabase) do
+    local label = string.format("%s (Lv %d)", quest.Mob, quest.Level)
+    if not TravelLookup[label] then
+        TravelLookup[label] = quest.NPCPos
+        table.insert(TravelOptions, label)
+    end
+end
+table.sort(TravelOptions)
+if not table.find(TravelOptions, _G.Settings.Teleport["Select Island"]) then
+    _G.Settings.Teleport["Select Island"] = TravelOptions[1] or ""
+end
+
 local function GetClosestEnemy(mobName)
     local closest, minDistance = nil, math.huge
     local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
@@ -412,6 +482,13 @@ for name in pairs(MaterialRoutes) do
 end
 table.sort(MaterialOptions)
 
+local function unwrapOption(option)
+    if typeof(option) == "table" then
+        return option[1]
+    end
+    return option
+end
+
 local function GetMaterialRoute(material)
     local routes = MaterialRoutes[material]
     if not routes then return nil end
@@ -438,6 +515,12 @@ local function GetClosestChest()
     local closest, minDistance = nil, math.huge
     local function consider(part)
         if part and part:IsA("BasePart") then
+            local parent = part.Parent
+            local disabled = (part.GetAttribute and part:GetAttribute("IsDisabled"))
+            if not disabled and parent and parent.GetAttribute then
+                disabled = parent:GetAttribute("IsDisabled")
+            end
+            if disabled then return end
             local distance = (part.Position - root.Position).Magnitude
             if distance < minDistance then
                 minDistance = distance
@@ -465,6 +548,10 @@ local function StopTween()
     if root then
         root.CFrame = root.CFrame
         root.Velocity = Vector3.zero
+    end
+    if activeTween then
+        activeTween:Cancel()
+        activeTween = nil
     end
 end
 
@@ -499,11 +586,10 @@ task.spawn(function()
                     local targetEnemy = GetClosestEnemy(questData.Mob)
                     if targetEnemy then
                         toTarget(targetEnemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
-                        local mainWeapon = GetWeaponByType(_G.Settings.Configs["Select Weapon"])
-                        if mainWeapon then EquipWeapon(mainWeapon) end
-                        if _G.Settings.Configs["Auto Haki"] and not LocalPlayer.Character:FindFirstChild("HasBuso") then
+                        if EquipPreferredWeapon() and _G.Settings.Configs["Auto Haki"] and not LocalPlayer.Character:FindFirstChild("HasBuso") then
                             ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso")
                         end
+                        PerformBasicAttack()
                     else
                         toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
                     end
@@ -532,6 +618,50 @@ task.spawn(function()
     end
 end)
 
+task.spawn(function()
+    while task.wait() do
+        if _G.Settings.Main["Auto Farm Mastery"] and not _G.Settings.Main["Auto Farm Level"] then
+            pcall(function()
+                local level = LocalPlayer.Data.Level.Value
+                local questData = GetQuestData(level)
+                if not questData then return end
+                local questGui = LocalPlayer.PlayerGui:FindFirstChild("Main")
+                    and LocalPlayer.PlayerGui.Main:FindFirstChild("Quest")
+                if questGui and questGui.Visible then
+                    -- already have quest
+                else
+                    local character = LocalPlayer.Character
+                    local root = character and character:FindFirstChild("HumanoidRootPart")
+                    if root and (root.Position - questData.NPCPos.Position).Magnitude > 10 then
+                        toTarget(questData.NPCPos)
+                        return
+                    end
+                    ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", questData.Quest, questData.QuestNum)
+                    task.wait(0.5)
+                end
+                local targetEnemy = GetClosestEnemy(questData.Mob)
+                if not targetEnemy then
+                    toTarget(questData.NPCPos)
+                    return
+                end
+                local hrp = targetEnemy:FindFirstChild("HumanoidRootPart")
+                local humanoid = targetEnemy:FindFirstChild("Humanoid")
+                if not hrp or not humanoid or humanoid.Health <= 0 then return end
+                toTarget(hrp.CFrame * CFrame.new(0, 25, 0))
+                local healthPercent = (humanoid.Health / math.max(humanoid.MaxHealth, 1)) * 100
+                if healthPercent <= (_G.Settings.Main["Mastery Health Threshold"] or 25) then
+                    if EquipMasteryWeapon() then
+                        PerformBasicAttack()
+                    end
+                else
+                    EquipPreferredWeapon()
+                    PerformBasicAttack()
+                end
+            end)
+        end
+    end
+end)
+
 -- Auto Farm Bone (Haunted Castle)
 task.spawn(function()
     while task.wait() do
@@ -546,8 +676,8 @@ task.spawn(function()
                 
                 if target then
                     toTarget(target.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
-                    local mainWeapon = GetWeaponByType(_G.Settings.Configs["Select Weapon"])
-                    if mainWeapon then EquipWeapon(mainWeapon) end
+                    EquipPreferredWeapon()
+                    PerformBasicAttack()
                 else
                     -- Teleport to Haunted Castle spawn area if no mobs found
                     toTarget(CFrame.new(-9516.99, 172.02, 6078.47))
@@ -597,8 +727,8 @@ task.spawn(function()
                 local target = GetClosestEnemyFromList(mobNames)
                 if target and target:FindFirstChild("HumanoidRootPart") then
                     toTarget(target.HumanoidRootPart.CFrame * CFrame.new(0, 25, 0))
-                    local weapon = GetWeaponByType(_G.Settings.Configs["Select Weapon"])
-                    if weapon then EquipWeapon(weapon) end
+                    EquipPreferredWeapon()
+                    PerformBasicAttack()
                 else
                     local anchor = route[1]
                     if anchor then
@@ -640,8 +770,8 @@ task.spawn(function()
                         local target = GetClosestEnemy(targetName)
                         if target then
                             toTarget(target.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
-                            local mainWeapon = GetWeaponByType(_G.Settings.Configs["Select Weapon"])
-                            if mainWeapon then EquipWeapon(mainWeapon) end
+                            EquipPreferredWeapon()
+                            PerformBasicAttack()
                         else
                             -- Check ReplicatedStorage if not in workspace
                             local rsTarget = ReplicatedStorage:FindFirstChild(targetName)
@@ -696,6 +826,118 @@ task.spawn(function()
              ReplicatedStorage.Remotes.CommF_:InvokeServer("Awakener", "Check")
              ReplicatedStorage.Remotes.CommF_:InvokeServer("Awakener", "Awaken")
         end
+    end
+end)
+
+local ESPColors = {
+    Players = Color3.fromRGB(0, 170, 255),
+    Chests = Color3.fromRGB(255, 221, 85),
+    Fruits = Color3.fromRGB(85, 255, 127),
+    Flowers = Color3.fromRGB(255, 105, 180),
+    Raids = Color3.fromRGB(190, 115, 255)
+}
+
+local ESPObjects = {
+    Players = {},
+    Chests = {},
+    Fruits = {},
+    Flowers = {},
+    Raids = {}
+}
+
+local FlowerNames = {
+    ["Blue Flower"] = true,
+    ["Red Flower"] = true,
+    ["Pink Flower"] = true
+}
+
+local function cleanupCategory(category)
+    for instance, highlight in pairs(ESPObjects[category]) do
+        if highlight then highlight:Destroy() end
+        ESPObjects[category][instance] = nil
+    end
+end
+
+local function pruneCategory(category)
+    for instance, highlight in pairs(ESPObjects[category]) do
+        if not instance or not instance.Parent then
+            if highlight then highlight:Destroy() end
+            ESPObjects[category][instance] = nil
+        end
+    end
+end
+
+local function ensureHighlight(category, adornee, color)
+    if not adornee or not adornee.Parent then return end
+    local store = ESPObjects[category]
+    local highlight = store[adornee]
+    if not highlight or not highlight.Parent then
+        highlight = Instance.new("Highlight")
+        highlight.Name = "AeroHub" .. category .. "ESP"
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Adornee = adornee
+        highlight.Parent = adornee:IsA("Model") and adornee or adornee.Parent or workspace
+        store[adornee] = highlight
+    end
+    highlight.FillColor = color
+    highlight.OutlineColor = color
+end
+
+local function updatePlayerESP()
+    pruneCategory("Players")
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            ensureHighlight("Players", player.Character, ESPColors.Players)
+        end
+    end
+end
+
+local function updateChestESP()
+    pruneCategory("Chests")
+    for _, chest in ipairs(CollectionService:GetTagged("_ChestTagged")) do
+        ensureHighlight("Chests", chest, ESPColors.Chests)
+    end
+end
+
+local function updateFruitESP()
+    pruneCategory("Fruits")
+    for _, descendant in ipairs(workspace:GetDescendants()) do
+        if descendant:IsA("Tool") and descendant:FindFirstChild("Handle") and string.find(descendant.Name, "Fruit") then
+            ensureHighlight("Fruits", descendant.Handle, ESPColors.Fruits)
+        end
+    end
+end
+
+local function updateFlowerESP()
+    pruneCategory("Flowers")
+    for _, descendant in ipairs(workspace:GetDescendants()) do
+        if FlowerNames[descendant.Name] and (descendant:IsA("Model") or descendant:IsA("BasePart")) then
+            ensureHighlight("Flowers", descendant:IsA("Model") and descendant or descendant, ESPColors.Flowers)
+        end
+    end
+end
+
+local function updateRaidESP()
+    pruneCategory("Raids")
+    local origin = workspace:FindFirstChild("_WorldOrigin")
+    local locations = origin and origin:FindFirstChild("Locations")
+    if not locations then return end
+    for _, loc in ipairs(locations:GetChildren()) do
+        if loc:IsA("BasePart") and string.find(loc.Name:lower(), "island") then
+            ensureHighlight("Raids", loc, ESPColors.Raids)
+        end
+    end
+end
+
+task.spawn(function()
+    while task.wait(0.8) do
+        if _G.Settings.ESP["Player ESP"] then updatePlayerESP() else cleanupCategory("Players") end
+        if _G.Settings.ESP["Chest ESP"] then updateChestESP() else cleanupCategory("Chests") end
+        if _G.Settings.ESP["Fruit ESP"] then updateFruitESP() else cleanupCategory("Fruits") end
+        if _G.Settings.ESP["Flower ESP"] then updateFlowerESP() else cleanupCategory("Flowers") end
+        if _G.Settings.ESP["Raid ESP"] then updateRaidESP() else cleanupCategory("Raids") end
     end
 end)
 
@@ -755,49 +997,123 @@ end
 local MainTab = Window:CreateTab({Name = "Main", Icon = "home", ImageSource = "Material", ShowTitle = true})
 
 MainTab:CreateSection("Farming")
-MainTab:CreateToggle({Name = "Auto Farm Level", CurrentValue = false, Callback = function(v) _G.Settings.Main["Auto Farm Level"] = v end}, "AutoFarmLevel")
-MainTab:CreateToggle({Name = "Auto Farm Bone", CurrentValue = false, Callback = function(v) _G.Settings.Main["Auto Farm Bone"] = v end}, "AutoFarmBone")
-MainTab:CreateToggle({Name = "Auto Elite Hunter", CurrentValue = false, Callback = function(v) _G.Settings.Main["Auto Elite Hunter"] = v end}, "AutoEliteHunter")
-MainTab:CreateToggle({Name = "Auto Farm Chest", CurrentValue = false, Callback = function(v) _G.Settings.Main["Auto Farm Chest"] = v end}, "AutoFarmChest")
+MainTab:CreateToggle({Name = "Auto Farm Level", CurrentValue = _G.Settings.Main["Auto Farm Level"], Callback = function(v) _G.Settings.Main["Auto Farm Level"] = v end}, "AutoFarmLevel")
+MainTab:CreateToggle({Name = "Auto Farm Bone", CurrentValue = _G.Settings.Main["Auto Farm Bone"], Callback = function(v) _G.Settings.Main["Auto Farm Bone"] = v end}, "AutoFarmBone")
+MainTab:CreateToggle({Name = "Auto Elite Hunter", CurrentValue = _G.Settings.Main["Auto Elite Hunter"], Callback = function(v) _G.Settings.Main["Auto Elite Hunter"] = v end}, "AutoEliteHunter")
+MainTab:CreateToggle({Name = "Auto Farm Chest", CurrentValue = _G.Settings.Main["Auto Farm Chest"], Callback = function(v) _G.Settings.Main["Auto Farm Chest"] = v end}, "AutoFarmChest")
 
-MainTab:CreateSection("Combat")
-MainTab:CreateToggle({Name = "Fast Attack", CurrentValue = true, Callback = function(v) _G.Settings.Configs["Fast Attack"] = v end}, "FastAttack")
-MainTab:CreateDropdown({Name = "Select Weapon", Options = {"Melee", "Sword", "Blox Fruit"}, CurrentValue = "Melee", Callback = function(v) _G.Settings.Configs["Select Weapon"] = v end}, "SelectWeapon")
+MainTab:CreateSection("Mastery Control")
+MainTab:CreateToggle({Name = "Auto Farm Mastery", CurrentValue = _G.Settings.Main["Auto Farm Mastery"], Callback = function(v) _G.Settings.Main["Auto Farm Mastery"] = v end}, "AutoFarmMastery")
+MainTab:CreateDropdown({
+    Name = "Mastery Weapon",
+    Options = {"Melee", "Sword", "Blox Fruit", "Gun"},
+    CurrentOption = {_G.Settings.Main["Mastery Weapon"]},
+    Callback = function(v)
+        _G.Settings.Main["Mastery Weapon"] = unwrapOption(v)
+    end
+}, "MasteryWeapon")
+MainTab:CreateSlider({Name = "Mastery HP %", Range = {5, 80}, Increment = 5, CurrentValue = _G.Settings.Main["Mastery Health Threshold"], Callback = function(v) _G.Settings.Main["Mastery Health Threshold"] = v end}, "MasteryHP")
+
+MainTab:CreateSection("Combat & Aura")
+MainTab:CreateToggle({Name = "Fast Attack", CurrentValue = _G.Settings.Configs["Fast Attack"], Callback = function(v) _G.Settings.Configs["Fast Attack"] = v end}, "FastAttack")
+MainTab:CreateToggle({Name = "Mob Aura", CurrentValue = _G.Settings.Main["Mob Aura"], Callback = function(v) _G.Settings.Main["Mob Aura"] = v end}, "MobAura")
+MainTab:CreateSlider({Name = "Aura Distance", Range = {50, 1500}, Increment = 25, CurrentValue = _G.Settings.Main["Distance Mob Aura"], Callback = function(v) _G.Settings.Main["Distance Mob Aura"] = v end}, "AuraDistance")
+MainTab:CreateDropdown({
+    Name = "Select Weapon",
+    Options = {"Melee", "Sword", "Blox Fruit"},
+    CurrentOption = {_G.Settings.Configs["Select Weapon"]},
+    Callback = function(v)
+        _G.Settings.Configs["Select Weapon"] = unwrapOption(v)
+    end
+}, "SelectWeapon")
 
 local StatsTab = Window:CreateTab({Name = "Stats", Icon = "bar_chart", ImageSource = "Material", ShowTitle = true})
-StatsTab:CreateToggle({Name = "Auto Stats", CurrentValue = false, Callback = function(v) _G.Settings.Stats["Enabled Auto Stats"] = v end}, "AutoStats")
-StatsTab:CreateDropdown({Name = "Select Stat", Options = {"Melee", "Defense", "Sword", "Gun", "Blox Fruit"}, CurrentValue = "Melee", Callback = function(v) _G.Settings.Stats["Select Stats"] = v end}, "SelectStat")
-StatsTab:CreateSlider({Name = "Points per Loop", Range = {1, 100}, Increment = 1, CurrentValue = 1, Callback = function(v) _G.Settings.Stats["Point Select"] = v end}, "PointsSelect")
+StatsTab:CreateToggle({Name = "Auto Stats", CurrentValue = _G.Settings.Stats["Enabled Auto Stats"], Callback = function(v) _G.Settings.Stats["Enabled Auto Stats"] = v end}, "AutoStats")
+StatsTab:CreateDropdown({
+    Name = "Select Stat",
+    Options = {"Melee", "Defense", "Sword", "Gun", "Blox Fruit"},
+    CurrentOption = {_G.Settings.Stats["Select Stats"]},
+    Callback = function(v)
+        _G.Settings.Stats["Select Stats"] = unwrapOption(v)
+    end
+}, "SelectStat")
+StatsTab:CreateSlider({Name = "Points per Loop", Range = {1, 100}, Increment = 1, CurrentValue = _G.Settings.Stats["Point Select"], Callback = function(v) _G.Settings.Stats["Point Select"] = v end}, "PointsSelect")
 
 local MaterialsTab = Window:CreateTab({Name = "Materials", Icon = "widgets", ImageSource = "Material", ShowTitle = true})
-MaterialsTab:CreateToggle({Name = "Auto Farm Material", CurrentValue = false, Callback = function(v) _G.Settings.Materials["Auto Farm Material"] = v end}, "AutoFarmMaterial")
-MaterialsTab:CreateDropdown({Name = "Select Material", Options = MaterialOptions, CurrentValue = _G.Settings.Materials["Select Material"], Callback = function(v) _G.Settings.Materials["Select Material"] = v end}, "SelectMaterial")
+MaterialsTab:CreateToggle({Name = "Auto Farm Material", CurrentValue = _G.Settings.Materials["Auto Farm Material"], Callback = function(v) _G.Settings.Materials["Auto Farm Material"] = v end}, "AutoFarmMaterial")
+MaterialsTab:CreateDropdown({
+    Name = "Select Material",
+    Options = MaterialOptions,
+    CurrentOption = {_G.Settings.Materials["Select Material"]},
+    Callback = function(v)
+        _G.Settings.Materials["Select Material"] = unwrapOption(v)
+    end
+}, "SelectMaterial")
 
 local BonesTab = Window:CreateTab({Name = "Bones", Icon = "ad_units", ImageSource = "Material", ShowTitle = true})
-BonesTab:CreateToggle({Name = "Auto Random Bone", CurrentValue = false, Callback = function(v) _G.Settings.Bones["Auto Random Bone"] = v end}, "AutoRandomBone")
+BonesTab:CreateToggle({Name = "Auto Random Bone", CurrentValue = _G.Settings.Bones["Auto Random Bone"], Callback = function(v) _G.Settings.Bones["Auto Random Bone"] = v end}, "AutoRandomBone")
 
 local RaidTab = Window:CreateTab({Name = "Raid", Icon = "security", ImageSource = "Material", ShowTitle = true})
-RaidTab:CreateToggle({Name = "Auto Start Raid", CurrentValue = false, Callback = function(v) _G.Settings.Raid["Auto Start Raid"] = v end}, "AutoStartRaid")
-RaidTab:CreateToggle({Name = "Auto Buy Chip", CurrentValue = false, Callback = function(v) _G.Settings.Raid["Auto Buy Chip"] = v end}, "AutoBuyChip")
-RaidTab:CreateDropdown({Name = "Select Chip", Options = {"Flame", "Ice", "Quake", "Light", "Dark", "Spider", "Rumble", "Magma", "Buddha", "Dough"}, CurrentValue = "Flame", Callback = function(v) _G.Settings.Raid["Select Chip"] = v end}, "SelectChip")
-RaidTab:CreateToggle({Name = "Auto Awaken", CurrentValue = false, Callback = function(v) _G.Settings.Raid["Auto Awaken"] = v end}, "AutoAwaken")
+RaidTab:CreateToggle({Name = "Auto Start Raid", CurrentValue = _G.Settings.Raid["Auto Start Raid"], Callback = function(v) _G.Settings.Raid["Auto Start Raid"] = v end}, "AutoStartRaid")
+RaidTab:CreateToggle({Name = "Auto Buy Chip", CurrentValue = _G.Settings.Raid["Auto Buy Chip"], Callback = function(v) _G.Settings.Raid["Auto Buy Chip"] = v end}, "AutoBuyChip")
+RaidTab:CreateDropdown({
+    Name = "Select Chip",
+    Options = {"Flame", "Ice", "Quake", "Light", "Dark", "Spider", "Rumble", "Magma", "Buddha", "Dough"},
+    CurrentOption = {_G.Settings.Raid["Select Chip"]},
+    Callback = function(v)
+        _G.Settings.Raid["Select Chip"] = unwrapOption(v)
+    end
+}, "SelectChip")
+RaidTab:CreateToggle({Name = "Auto Awaken", CurrentValue = _G.Settings.Raid["Auto Awaken"], Callback = function(v) _G.Settings.Raid["Auto Awaken"] = v end}, "AutoAwaken")
+
+local TravelTab = Window:CreateTab({Name = "Travel", Icon = "travel_explore", ImageSource = "Material", ShowTitle = true})
+TravelTab:CreateSection("Teleport")
+TravelTab:CreateDropdown({
+    Name = "Select Destination",
+    Options = TravelOptions,
+    CurrentOption = {_G.Settings.Teleport["Select Island"]},
+    Callback = function(v)
+        _G.Settings.Teleport["Select Island"] = unwrapOption(v)
+    end
+}, "SelectIsland")
+TravelTab:CreateButton({Name = "Teleport", Callback = function()
+    local selection = _G.Settings.Teleport["Select Island"]
+    local cframe = TravelLookup[selection]
+    if cframe then toTarget(cframe) end
+end})
+
+local ESPTab = Window:CreateTab({Name = "ESP", Icon = "visibility", ImageSource = "Material", ShowTitle = true})
+ESPTab:CreateSection("Visual Helpers")
+ESPTab:CreateToggle({Name = "Player ESP", CurrentValue = _G.Settings.ESP["Player ESP"], Callback = function(v) _G.Settings.ESP["Player ESP"] = v end}, "PlayerESP")
+ESPTab:CreateToggle({Name = "Chest ESP", CurrentValue = _G.Settings.ESP["Chest ESP"], Callback = function(v) _G.Settings.ESP["Chest ESP"] = v end}, "ChestESP")
+ESPTab:CreateToggle({Name = "Fruit ESP", CurrentValue = _G.Settings.ESP["Fruit ESP"], Callback = function(v) _G.Settings.ESP["Fruit ESP"] = v end}, "FruitESP")
+ESPTab:CreateToggle({Name = "Flower ESP", CurrentValue = _G.Settings.ESP["Flower ESP"], Callback = function(v) _G.Settings.ESP["Flower ESP"] = v end}, "FlowerESP")
+ESPTab:CreateToggle({Name = "Raid ESP", CurrentValue = _G.Settings.ESP["Raid ESP"], Callback = function(v) _G.Settings.ESP["Raid ESP"] = v end}, "RaidESP")
 
 local MiscTab = Window:CreateTab({Name = "Misc", Icon = "settings", ImageSource = "Material", ShowTitle = true})
+MiscTab:CreateSection("Utilities")
 MiscTab:CreateButton({Name = "Server Hop", Callback = function() ServerHop() end})
-MiscTab:CreateToggle({Name = "White Screen", CurrentValue = false, Callback = function(v) 
-    _G.Settings.Configs["White Screen"] = v 
+MiscTab:CreateButton({Name = "Stop Tween (Emergency)", Callback = function() StopTween() end})
+MiscTab:CreateSection("Display & Teams")
+MiscTab:CreateToggle({Name = "White Screen", CurrentValue = _G.Settings.Configs["White Screen"], Callback = function(v)
+    _G.Settings.Configs["White Screen"] = v
     game:GetService("RunService"):Set3dRenderingEnabled(not v)
 end}, "WhiteScreen")
-MiscTab:CreateToggle({Name = "Auto Select Team", CurrentValue = true, Callback = function(v)
+MiscTab:CreateToggle({Name = "Auto Select Team", CurrentValue = _G.Settings.Teams["Auto Select Team"], Callback = function(v)
     _G.Settings.Teams["Auto Select Team"] = v
     if v then AutoChooseTeam() end
 end}, "AutoSelectTeam")
-MiscTab:CreateDropdown({Name = "Preferred Team", Options = {"Pirates", "Marines"}, CurrentValue = _G.Settings.Teams["Preferred Team"], Callback = function(v)
-    _G.Settings.Teams["Preferred Team"] = v
-    AutoChooseTeam()
-end}, "PreferredTeam")
-MiscTab:CreateButton({Name = "Stop Tween (Emergency)", Callback = function()
-    StopTween()
-end})
+MiscTab:CreateDropdown({
+    Name = "Preferred Team",
+    Options = {"Pirates", "Marines"},
+    CurrentOption = {_G.Settings.Teams["Preferred Team"]},
+    Callback = function(v)
+        _G.Settings.Teams["Preferred Team"] = unwrapOption(v)
+        AutoChooseTeam()
+    end
+}, "PreferredTeam")
+
+MiscTab:BuildThemeSection()
+MiscTab:BuildConfigSection()
 
 Luna:LoadAutoloadConfig()
