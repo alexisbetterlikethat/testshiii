@@ -279,7 +279,8 @@ end
 
 local lastBasicAttack = 0
 local function PerformBasicAttack()
-    if os.clock() - lastBasicAttack < 0.12 then return end
+    local cooldown = _G.Settings.Configs and _G.Settings.Configs["Fast Attack"] and 0.035 or 0.12
+    if os.clock() - lastBasicAttack < cooldown then return end
     lastBasicAttack = os.clock()
     local camera = workspace.CurrentCamera
     local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
@@ -290,6 +291,14 @@ local function PerformBasicAttack()
         task.delay(0.05, function()
             VirtualUser:Button1Up(center, camera and camera.CFrame or CFrame.new())
         end)
+        if _G.Settings.Configs and _G.Settings.Configs["Fast Attack"] then
+            task.delay(0.025, function()
+                VirtualUser:Button1Down(center, camera and camera.CFrame or CFrame.new())
+                task.delay(0.03, function()
+                    VirtualUser:Button1Up(center, camera and camera.CFrame or CFrame.new())
+                end)
+            end)
+        end
     end)
 end
 
@@ -375,19 +384,22 @@ task.spawn(function()
 end)
 
 task.spawn(function()
-    while task.wait(0.05) do
+    while true do
+        local delay = (_G.Settings.Configs and _G.Settings.Configs["Fast Attack"]) and 0.02 or 0.06
+        task.wait(delay)
         if ShouldAutoClick() then
-            local target = GetClosestActiveEnemy(90)
+            local target = GetClosestActiveEnemy(95)
             if target then
                 AnchorEnemy(target)
                 if EquipPreferredWeapon() then
                     EnsureHaki()
                     ReleaseSit()
                     PerformBasicAttack()
+                    if _G.Settings.Configs and _G.Settings.Configs["Fast Attack"] then
+                        FastAttack:AttackNearest()
+                    end
                 end
             end
-        else
-            task.wait(0.15)
         end
     end
 end)
