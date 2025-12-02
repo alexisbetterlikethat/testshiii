@@ -261,18 +261,24 @@ end
 task.spawn(BypassAntiCheat)
 
 -- Webhook & Auto Hop Logic
-local function SendWebhook(title, description, color)
+local function SendWebhook(title, description, color, fields)
     if not _G.Settings.Webhook["Enabled"] or _G.Settings.Webhook["Url"] == "" then return end
     
+    local embed = {
+        ["title"] = title,
+        ["description"] = description,
+        ["color"] = color or 65280,
+        ["footer"] = {
+            ["text"] = "Aero Hub - " .. os.date("%X")
+        }
+    }
+
+    if fields then
+        embed["fields"] = fields
+    end
+    
     local data = {
-        ["embeds"] = {{
-            ["title"] = title,
-            ["description"] = description,
-            ["color"] = color or 65280,
-            ["footer"] = {
-                ["text"] = "Aero Hub - " .. os.date("%X")
-            }
-        }}
+        ["embeds"] = {embed}
     }
     
     local jsonData = HttpService:JSONEncode(data)
