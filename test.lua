@@ -615,38 +615,35 @@ local function toTarget(targetPos)
         return -- Recalculate path after teleport
     end
 
-    local Distance = (targetCFrame.Position - RootPart.Position).Magnitude
+    local currentPos = RootPart.Position
+    local finalPos = targetCFrame.Position
+    local totalDistance = (finalPos - currentPos).Magnitude
     
-    -- Redz Logic Speed
+    -- Waypoint Logic (High Tween - Non-Blocking)
+    local destinationCFrame = targetCFrame
     local Speed = 350
-    if Distance < 250 then Speed = 600 end
-    if Distance > 1000 then Speed = 350 end 
-
-    -- High Tween Logic (Avoid Water/Mountains)
-    if Distance > 150 then
-        local highY = math.max(RootPart.Position.Y, targetCFrame.Position.Y) + 100
-        if highY < 300 then highY = 300 end -- Minimum safe height
-        
-        local highCFrame = CFrame.new(RootPart.Position.X, highY, RootPart.Position.Z)
-        local targetHighCFrame = CFrame.new(targetCFrame.Position.X, highY, targetCFrame.Position.Z)
+    
+    if totalDistance > 150 then
+        local highY = 300
+        if finalPos.Y > 250 then highY = finalPos.Y + 50 end
         
         -- 1. Go Up
-        if math.abs(RootPart.Position.Y - highY) > 20 then
-            local upTweenInfo = TweenInfo.new(math.abs(RootPart.Position.Y - highY) / Speed, Enum.EasingStyle.Linear)
-            local upTween = TweenService:Create(RootPart, upTweenInfo, {CFrame = highCFrame})
-            upTween:Play()
-            upTween.Completed:Wait()
-        end
-        
+        if currentPos.Y < highY - 10 then
+            destinationCFrame = CFrame.new(currentPos.X, highY, currentPos.Z)
+            Speed = 400
         -- 2. Go Across
-        local acrossDist = (highCFrame.Position - targetHighCFrame.Position).Magnitude
-        local acrossTweenInfo = TweenInfo.new(acrossDist / Speed, Enum.EasingStyle.Linear)
-        local acrossTween = TweenService:Create(RootPart, acrossTweenInfo, {CFrame = targetHighCFrame})
-        acrossTween:Play()
-        acrossTween.Completed:Wait()
+        elseif (Vector3.new(currentPos.X, 0, currentPos.Z) - Vector3.new(finalPos.X, 0, finalPos.Z)).Magnitude > 50 then
+            destinationCFrame = CFrame.new(finalPos.X, highY, finalPos.Z)
+            Speed = 350
+        -- 3. Descend (Default)
+        else
+            Speed = 400
+        end
+    else
+        Speed = 600
     end
 
-    local TweenInfo = TweenInfo.new((targetCFrame.Position - RootPart.Position).Magnitude / Speed, Enum.EasingStyle.Linear)
+    local TweenInfo = TweenInfo.new((destinationCFrame.Position - RootPart.Position).Magnitude / Speed, Enum.EasingStyle.Linear)
     if activeTween then activeTween:Cancel() end
     
     -- Enable Noclip & PlatformStand (Fixes Bouncing)
@@ -662,7 +659,7 @@ local function toTarget(targetPos)
     bv.MaxForce = Vector3.new(100000, 100000, 100000)
     bv.Velocity = Vector3.zero
     
-    local Tween = TweenService:Create(RootPart, TweenInfo, {CFrame = targetCFrame})
+    local Tween = TweenService:Create(RootPart, TweenInfo, {CFrame = destinationCFrame})
     activeTween = Tween
     
     local startTime = os.clock()
@@ -683,7 +680,7 @@ local function toTarget(targetPos)
     -- Stuck/Timeout Check
     task.spawn(function()
         while activeTween == Tween do
-            if os.clock() - startTime > (Distance / Speed) + 2 then
+            if os.clock() - startTime > ((destinationCFrame.Position - RootPart.Position).Magnitude / Speed) + 2 then
                 if activeTween then activeTween:Cancel() end
                 break
             end
@@ -1259,6 +1256,8 @@ local function BringMob(target)
 end
 
 -- Auto Farm Level (Improved Lock-On Logic)
+local LastMobPosition = nil
+
 task.spawn(function()
     while task.wait() do
         if _G.Settings.Main["Auto Farm Level"] and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -1294,6 +1293,7 @@ task.spawn(function()
                         
                         -- Lock-On Loop
                         if targetEnemy and targetEnemy:FindFirstChild("HumanoidRootPart") and targetEnemy:FindFirstChild("Humanoid") and targetEnemy.Humanoid.Health > 0 then
+                            LastMobPosition = targetEnemy.HumanoidRootPart.Position
                             local enemyRoot = targetEnemy.HumanoidRootPart
                             local enemyHumanoid = targetEnemy.Humanoid
                             
@@ -1349,8 +1349,12 @@ task.spawn(function()
                                 task.wait()
                             end
                         else
-                            -- Mob not found, hover above quest giver area to wait for spawn
-                            toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
+                            -- Mob not found
+                            if LastMobPosition and (LocalPlayer.Character.HumanoidRootPart.Position - LastMobPosition).Magnitude < 500 then
+                                toTarget(CFrame.new(LastMobPosition) * CFrame.new(0, 50, 0))
+                            else
+                                toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
+                            end
                         end
                     end
                 end)
