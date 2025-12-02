@@ -1228,63 +1228,95 @@ local function BringMob(target)
     end
 end
 
--- Auto Farm Level (Redz Logic)
+-- Auto Farm Level (Improved Lock-On Logic)
 task.spawn(function()
     while task.wait() do
         if _G.Settings.Main["Auto Farm Level"] and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             if _G.Settings.Main["Auto Farm Chest"] then
-                -- Pause Auto Farm Level if Chest Farm is active to prevent conflict
+                -- Pause Auto Farm Level if Chest Farm is active
             else
                 pcall(function()
                     local level = LocalPlayer.Data.Level.Value
-                local questData = GetQuestData(level)
-                if not questData then return end
-                
-                local questGui = LocalPlayer.PlayerGui:FindFirstChild("Main") and LocalPlayer.PlayerGui.Main:FindFirstChild("Quest")
-                local hasQuest = questGui and questGui.Visible and (string.find(questGui.Container.QuestTitle.Title.Text, questData.Mob) or string.find(questGui.Container.QuestTitle.Title.Text, "Boss"))
-                
-                if not hasQuest then
-                    if (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude > 10 then
-                        toTarget(questData.NPCPos)
-                    else
-                        ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", questData.Quest, questData.QuestNum)
-                        task.wait(0.5)
-                    end
-                else
-                    local targetEnemy = GetClosestEnemy(questData.Mob)
-                    if targetEnemy and targetEnemy:FindFirstChild("HumanoidRootPart") and targetEnemy:FindFirstChild("Humanoid") and targetEnemy.Humanoid.Health > 0 then
-                        -- Teleport Above Mob
-                        local farmPos = targetEnemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0)
-                        
-                        -- Stabilize if close
-                        if (LocalPlayer.Character.HumanoidRootPart.Position - farmPos.Position).Magnitude < 50 then
-                             LocalPlayer.Character.HumanoidRootPart.CFrame = farmPos
-                             LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
-                             if LocalPlayer.Character:FindFirstChild("Humanoid") then
-                                LocalPlayer.Character.Humanoid.PlatformStand = true
-                             end
+                    local questData = GetQuestData(level)
+                    if not questData then return end
+                    
+                    local questGui = LocalPlayer.PlayerGui:FindFirstChild("Main") and LocalPlayer.PlayerGui.Main:FindFirstChild("Quest")
+                    local hasQuest = questGui and questGui.Visible and (string.find(questGui.Container.QuestTitle.Title.Text, questData.Mob) or string.find(questGui.Container.QuestTitle.Title.Text, "Boss"))
+                    
+                    if not hasQuest then
+                        -- Abandon wrong quest
+                        if questGui and questGui.Visible then
+                            ReplicatedStorage.Remotes.CommF_:InvokeServer("AbandonQuest")
+                            task.wait(0.5)
+                            return
+                        end
+
+                        -- Go to Quest Giver
+                        if (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude > 10 then
+                            toTarget(questData.NPCPos)
                         else
-                             toTarget(farmPos)
-                        end
-                        
-                        -- Bring Mobs
-                        BringMob(targetEnemy)
-                        
-                        -- Attack
-                        if EquipPreferredWeapon() then
-                            EnsureHaki()
-                            ReleaseSit()
-                            PerformBasicAttack()
-                            if _G.Settings.Configs["Fast Attack"] then
-                                FastAttack:AttackNearest()
-                            end
+                            ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", questData.Quest, questData.QuestNum)
+                            task.wait(0.5)
                         end
                     else
-                        -- Mob not found, hover above quest giver area
-                        toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
+                        -- Quest Active: Find and Kill
+                        local targetEnemy = GetClosestEnemy(questData.Mob)
+                        
+                        -- Lock-On Loop
+                        if targetEnemy and targetEnemy:FindFirstChild("HumanoidRootPart") and targetEnemy:FindFirstChild("Humanoid") and targetEnemy.Humanoid.Health > 0 then
+                            local enemyRoot = targetEnemy.HumanoidRootPart
+                            local enemyHumanoid = targetEnemy.Humanoid
+                            
+                            -- Repeat until dead or quest finished
+                            while _G.Settings.Main["Auto Farm Level"] and enemyHumanoid.Health > 0 and targetEnemy.Parent do
+                                local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                                if not myRoot then break end
+                                
+                                -- Check Quest Status inside loop
+                                if not (LocalPlayer.PlayerGui.Main.Quest.Visible and (string.find(LocalPlayer.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text, questData.Mob) or string.find(LocalPlayer.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text, "Boss"))) then
+                                    break
+                                end
+
+                                -- Teleport/Tween
+                                local farmPos = enemyRoot.CFrame * CFrame.new(0, 30, 0)
+                                if (myRoot.Position - farmPos.Position).Magnitude < 50 then
+                                    myRoot.CFrame = farmPos
+                                    myRoot.Velocity = Vector3.zero
+                                    if LocalPlayer.Character:FindFirstChild("Humanoid") then
+                                        LocalPlayer.Character.Humanoid.PlatformStand = true
+                                    end
+                                else
+                                    toTarget(farmPos)
+                                end
+                                
+                                -- Modify Enemy (Stun)
+                                enemyRoot.CanCollide = false
+                                enemyRoot.Size = Vector3.new(60, 60, 60)
+                                enemyHumanoid.WalkSpeed = 0
+                                enemyHumanoid.JumpPower = 0
+                                if targetEnemy:FindFirstChild("Head") then targetEnemy.Head.CanCollide = false end
+                                
+                                -- Bring Neighbors
+                                BringMob(targetEnemy)
+                                
+                                -- Attack
+                                if EquipPreferredWeapon() then
+                                    EnsureHaki()
+                                    ReleaseSit()
+                                    PerformBasicAttack()
+                                    if _G.Settings.Configs["Fast Attack"] then
+                                        FastAttack:AttackNearest()
+                                    end
+                                end
+                                
+                                task.wait()
+                            end
+                        else
+                            -- Mob not found, hover above quest giver area to wait for spawn
+                            toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
+                        end
                     end
-                end
-            end)
+                end)
             end
         end
     end
@@ -2364,6 +2396,9 @@ end}, "WebhookLevelUp")
 SettingsTab:CreateToggle({Name = "Notify on Rare Item", CurrentValue = _G.Settings.Webhook["OnRareItem"], Callback = function(v)
     _G.Settings.Webhook["OnRareItem"] = v
 end}, "WebhookRareItem")
+SettingsTab:CreateSlider({Name = "Stats Interval (Min)", Range = {1, 60}, Increment = 1, CurrentValue = _G.Settings.Webhook["Interval"] or 10, Callback = function(v)
+    _G.Settings.Webhook["Interval"] = v
+end}, "WebhookInterval")
 
 SettingsTab:BuildThemeSection()
 SettingsTab:BuildConfigSection()
@@ -2400,4 +2435,49 @@ task.spawn(function()
     LocalPlayer.CharacterAdded:Connect(function(char)
         char.ChildAdded:Connect(onItemAdded)
     end)
+end)
+
+-- Webhook Stats Loop
+task.spawn(function()
+    while task.wait(60) do
+        if _G.Settings.Webhook["Enabled"] and _G.Settings.Webhook["Url"] ~= "" then
+            local interval = _G.Settings.Webhook["Interval"] or 10
+            -- Check if enough time passed (simple counter or os.time check could be better, but sleep loop is fine for now)
+            -- Actually, the loop waits 60s, so we need a counter.
+            
+            if not _G.WebhookTimer then _G.WebhookTimer = 0 end
+            _G.WebhookTimer = _G.WebhookTimer + 1
+            
+            if _G.WebhookTimer >= interval then
+                _G.WebhookTimer = 0
+                
+                local level = LocalPlayer.Data.Level.Value
+                local beli = LocalPlayer.Data.Beli.Value
+                local frags = LocalPlayer.Data.Fragments.Value
+                local devilFruit = LocalPlayer.Data.DevilFruit.Value
+                
+                local inventory = "None"
+                local backpack = LocalPlayer:FindFirstChild("Backpack")
+                if backpack then
+                    local items = {}
+                    for _, item in ipairs(backpack:GetChildren()) do
+                        if item:IsA("Tool") and (string.find(item.Name, "Fruit") or string.find(item.Name, "Key")) then
+                            table.insert(items, item.Name)
+                        end
+                    end
+                    if #items > 0 then inventory = table.concat(items, ", ") end
+                end
+                
+                local fields = {
+                    {name = "Level", value = tostring(level), inline = true},
+                    {name = "Beli", value = formatNumber(beli), inline = true},
+                    {name = "Fragments", value = formatNumber(frags), inline = true},
+                    {name = "Current Fruit", value = tostring(devilFruit), inline = true},
+                    {name = "Rare Inventory", value = inventory, inline = false}
+                }
+                
+                SendWebhook("Account Stats", "Current status report:", 3447003, fields)
+            end
+        end
+    end
 end)
