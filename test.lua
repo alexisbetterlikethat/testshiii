@@ -11,7 +11,13 @@ local Window = Luna:CreateWindow({
         RootFolder = nil,
         ConfigFolder = "AeroHub-BloxFruits-Ultimate"
     },
-    KeySystem = false
+    KeySystem = false,
+    Theme = {
+        Accent = Color3.fromRGB(0, 170, 255), -- Aero Blue
+        Background = Color3.fromRGB(15, 15, 15),
+        Foreground = Color3.fromRGB(25, 25, 25),
+        Text = Color3.fromRGB(255, 255, 255),
+    }
 })
 
 Window:CreateHomeTab({
@@ -115,9 +121,19 @@ local CollectionService = game:GetService("CollectionService")
 local TeleportService = game:GetService("TeleportService")
 
 local LocalPlayer = Players.LocalPlayer
-local CurrentWorld = (game.PlaceId == 2753915549 and 1)
-    or (game.PlaceId == 4442272183 and 2)
-    or (game.PlaceId == 7449423635 and 3)
+local PlaceId = game.PlaceId
+local World1 = PlaceId == 2753915549
+local World2 = PlaceId == 4442272183
+local World3 = PlaceId == 7449423635
+local CurrentWorld = (World1 and 1) or (World2 and 2) or (World3 and 3) or 1
+
+local function CheckSea(reqWorld)
+    if reqWorld == 1 and World1 then return true end
+    if reqWorld == 2 and World2 then return true end
+    if reqWorld == 3 and World3 then return true end
+    return false
+end
+
 local fireclickdetectorFn = rawget(_G, "fireclickdetector")
 local firetouchinterestFn = rawget(_G, "firetouchinterest")
 local activeTween
@@ -439,6 +455,84 @@ local function PerformBasicAttack()
     end)
 end
 
+local function CheckNearestTeleporter(targetPos)
+    local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+    local targetPosVec = (typeof(targetPos) == "CFrame" and targetPos.Position) or targetPos
+    local minDistance = math.huge
+    local nearest = nil
+
+    local Teleporters = {}
+    if World1 then
+        Teleporters = {
+            ["Sky3"] = Vector3.new(-7894, 5547, -380),
+            ["Sky3Exit"] = Vector3.new(-4607, 874, -1667),
+            ["UnderWater"] = Vector3.new(61163, 11, 1819),
+            ["UnderwaterExit"] = Vector3.new(4050, -1, -1814)
+        }
+    elseif World2 then
+        Teleporters = {
+            ["Swan Mansion"] = Vector3.new(-390, 332, 673),
+            ["Swan Room"] = Vector3.new(2285, 15, 905),
+            ["Cursed Ship"] = Vector3.new(923, 126, 32852),
+            ["Zombie Island"] = Vector3.new(-6509, 83, -133)
+        }
+    elseif World3 then
+        Teleporters = {
+            ["Floating Turtle"] = Vector3.new(-12462, 375, -7552),
+            ["Hydra Island"] = Vector3.new(5662, 1013, -335),
+            ["Mansion"] = Vector3.new(-12462, 375, -7552),
+            ["Castle"] = Vector3.new(-5036, 315, -3179),
+            ["Beautiful Pirate"] = Vector3.new(5319, 23, -93),
+            ["Beautiful Room"] = Vector3.new(5314.58, 22.53, -125.94),
+            ["Temple of Time"] = Vector3.new(28286, 14897, 103)
+        }
+    end
+
+    for _, pos in pairs(Teleporters) do
+        local dist = (pos - targetPosVec).Magnitude
+        if dist < minDistance then
+            minDistance = dist
+            nearest = pos
+        end
+    end
+
+    if nearest and minDistance < (targetPosVec - myPos).Magnitude then
+        return nearest
+    end
+    return nil
+end
+
+local function RequestEntrance(pos)
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", pos)
+end
+
+local function EnableNoclip()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        if not char.HumanoidRootPart:FindFirstChild("BodyClip") then
+            local bv = Instance.new("BodyVelocity")
+            bv.Name = "BodyClip"
+            bv.Parent = char.HumanoidRootPart
+            bv.MaxForce = Vector3.new(100000, 100000, 100000)
+            bv.Velocity = Vector3.zero
+        end
+        
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end
+end
+
+local function DisableNoclip()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local bv = char.HumanoidRootPart:FindFirstChild("BodyClip")
+        if bv then bv:Destroy() end
+    end
+end
+
 local function toTarget(targetPos)
     if not targetPos then return end
     local targetCFrame
@@ -452,19 +546,34 @@ local function toTarget(targetPos)
     if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
     
     local RootPart = Character.HumanoidRootPart
+    
+    -- Smart Teleport Logic
+    local nearestTeleport = CheckNearestTeleporter(targetCFrame.Position)
+    if nearestTeleport then
+        RequestEntrance(nearestTeleport)
+        task.wait(0.5)
+        return -- Recalculate path after teleport
+    end
+
     local Distance = (targetCFrame.Position - RootPart.Position).Magnitude
     
-    local Speed = 300
+    local Speed = 350
     if Distance < 250 then Speed = 600 end
     if Distance > 1000 then Speed = 350 end 
 
     local TweenInfo = TweenInfo.new(Distance / Speed, Enum.EasingStyle.Linear)
     if activeTween then activeTween:Cancel() end
+    
+    -- Enable Noclip during Tween
+    EnableNoclip()
+    
     local Tween = TweenService:Create(RootPart, TweenInfo, {CFrame = targetCFrame})
     activeTween = Tween
+    
     Tween.Completed:Connect(function()
         if activeTween == Tween then
             activeTween = nil
+            DisableNoclip() -- Disable Noclip when done
         end
     end)
     
@@ -644,7 +753,19 @@ local QuestDatabase = {
 local function GetQuestData(level)
     local bestQuest = nil
     for _, questData in ipairs(QuestDatabase) do
-        if level >= questData.Level then bestQuest = questData else break end
+        if level >= questData.Level then 
+            -- Determine Quest World based on Level
+            local questWorld = 1
+            if questData.Level >= 700 and questData.Level < 1500 then questWorld = 2 end
+            if questData.Level >= 1500 then questWorld = 3 end
+            
+            -- Only select quest if we are in the correct world
+            if CheckSea(questWorld) then
+                bestQuest = questData 
+            end
+        else 
+            break 
+        end
     end
     return bestQuest
 end
@@ -839,6 +960,8 @@ local function ScoreChest(part)
     return 0.5
 end
 
+local ChestBlacklist = {}
+
 local function GetBestChest()
     local character = LocalPlayer.Character
     local root = character and character:FindFirstChild("HumanoidRootPart")
@@ -846,6 +969,7 @@ local function GetBestChest()
     local best, bestWeight = nil, -math.huge
     local function consider(part)
         if part and part:IsA("BasePart") then
+            if ChestBlacklist[part] then return end
             local parent = part.Parent
             local disabled = (part.GetAttribute and part:GetAttribute("IsDisabled"))
             if not disabled and parent and parent.GetAttribute then
@@ -1020,11 +1144,31 @@ task.spawn(function()
     end
 end)
 
+local currentChest = nil
+local chestStart = 0
+
 task.spawn(function()
     while task.wait(0.3) do
         if _G.Settings.Main["Auto Farm Chest"] then
             pcall(function()
                 local chest = GetBestChest()
+                
+                -- Stuck Check Logic
+                if chest then
+                    if currentChest == chest then
+                        if os.clock() - chestStart > 5 then
+                            ChestBlacklist[chest] = true
+                            currentChest = nil
+                            return
+                        end
+                    else
+                        currentChest = chest
+                        chestStart = os.clock()
+                    end
+                else
+                    currentChest = nil
+                end
+
                 local character = LocalPlayer.Character
                 local root = character and character:FindFirstChild("HumanoidRootPart")
                 if chest and root then
@@ -1045,6 +1189,8 @@ task.spawn(function()
             end)
         else
             chestDryCounter = 0
+            ChestBlacklist = {}
+            currentChest = nil
         end
     end
 end)
@@ -1443,107 +1589,100 @@ local ESPColors = {
     Raids = Color3.fromRGB(190, 115, 255)
 }
 
-local ESPObjects = {
-    Players = {},
-    Chests = {},
-    Fruits = {},
-    Flowers = {},
-    Raids = {}
-}
-
-local FlowerNames = {
-    ["Blue Flower"] = true,
-    ["Red Flower"] = true,
-    ["Pink Flower"] = true
-}
-
-local function cleanupCategory(category)
-    for instance, highlight in pairs(ESPObjects[category]) do
-        if highlight then highlight:Destroy() end
-        ESPObjects[category][instance] = nil
+local function CreateESP(adornee, text, color)
+    if not adornee then return end
+    local bg = adornee:FindFirstChild("AeroESP")
+    if not bg then
+        bg = Instance.new("BillboardGui")
+        bg.Name = "AeroESP"
+        bg.Adornee = adornee
+        bg.Size = UDim2.new(0, 200, 0, 50)
+        bg.StudsOffset = Vector3.new(0, 3, 0)
+        bg.AlwaysOnTop = true
+        
+        local label = Instance.new("TextLabel")
+        label.Parent = bg
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = color
+        label.TextStrokeTransparency = 0.5
+        label.TextSize = 12
+        label.Font = Enum.Font.GothamBold
+        bg.Parent = adornee
+    end
+    
+    local label = bg:FindFirstChild("TextLabel")
+    if label then
+        label.Text = text
+        label.TextColor3 = color
     end
 end
 
-local function pruneCategory(category)
-    for instance, highlight in pairs(ESPObjects[category]) do
-        if not instance or not instance.Parent then
-            if highlight then highlight:Destroy() end
-            ESPObjects[category][instance] = nil
-        end
+local function ClearESP(adornee)
+    if adornee then
+        local bg = adornee:FindFirstChild("AeroESP")
+        if bg then bg:Destroy() end
     end
-end
-
-local function ensureHighlight(category, adornee, color)
-    if not adornee or not adornee.Parent then return end
-    local store = ESPObjects[category]
-    local highlight = store[adornee]
-    if not highlight or not highlight.Parent then
-        highlight = Instance.new("Highlight")
-        highlight.Name = "AeroHub" .. category .. "ESP"
-        highlight.FillTransparency = 0.5
-        highlight.OutlineTransparency = 0
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        highlight.Adornee = adornee
-        highlight.Parent = adornee:IsA("Model") and adornee or adornee.Parent or workspace
-        store[adornee] = highlight
-    end
-    highlight.FillColor = color
-    highlight.OutlineColor = color
 end
 
 local function updatePlayerESP()
-    pruneCategory("Players")
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            ensureHighlight("Players", player.Character, ESPColors.Players)
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            if _G.Settings.ESP["Player ESP"] then
+                local dist = (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.Head.Position).Magnitude
+                local health = player.Character.Humanoid.Health
+                local text = string.format("%s\n[%.0f] [%.0f%%]", player.Name, dist, health)
+                CreateESP(player.Character.Head, text, ESPColors.Players)
+            else
+                ClearESP(player.Character.Head)
+            end
         end
     end
 end
 
 local function updateChestESP()
-    pruneCategory("Chests")
     for _, chest in ipairs(CollectionService:GetTagged("_ChestTagged")) do
-        ensureHighlight("Chests", chest, ESPColors.Chests)
+        if _G.Settings.ESP["Chest ESP"] then
+            local dist = (LocalPlayer.Character.HumanoidRootPart.Position - chest.Position).Magnitude
+            CreateESP(chest, string.format("Chest\n[%.0f]", dist), ESPColors.Chests)
+        else
+            ClearESP(chest)
+        end
     end
 end
 
 local function updateFruitESP()
-    pruneCategory("Fruits")
     for _, descendant in ipairs(workspace:GetDescendants()) do
         if descendant:IsA("Tool") and descendant:FindFirstChild("Handle") and string.find(descendant.Name, "Fruit") then
-            ensureHighlight("Fruits", descendant.Handle, ESPColors.Fruits)
+            if _G.Settings.ESP["Fruit ESP"] then
+                local dist = (LocalPlayer.Character.HumanoidRootPart.Position - descendant.Handle.Position).Magnitude
+                CreateESP(descendant.Handle, string.format("%s\n[%.0f]", descendant.Name, dist), ESPColors.Fruits)
+            else
+                ClearESP(descendant.Handle)
+            end
         end
     end
 end
 
 local function updateFlowerESP()
-    pruneCategory("Flowers")
     for _, descendant in ipairs(workspace:GetDescendants()) do
-        if FlowerNames[descendant.Name] and (descendant:IsA("Model") or descendant:IsA("BasePart")) then
-            ensureHighlight("Flowers", descendant:IsA("Model") and descendant or descendant, ESPColors.Flowers)
-        end
-    end
-end
-
-local function updateRaidESP()
-    pruneCategory("Raids")
-    local origin = workspace:FindFirstChild("_WorldOrigin")
-    local locations = origin and origin:FindFirstChild("Locations")
-    if not locations then return end
-    for _, loc in ipairs(locations:GetChildren()) do
-        if loc:IsA("BasePart") and string.find(loc.Name:lower(), "island") then
-            ensureHighlight("Raids", loc, ESPColors.Raids)
+        if (descendant.Name == "Blue Flower" or descendant.Name == "Red Flower") and descendant:IsA("BasePart") then
+            if _G.Settings.ESP["Flower ESP"] then
+                local dist = (LocalPlayer.Character.HumanoidRootPart.Position - descendant.Position).Magnitude
+                CreateESP(descendant, string.format("%s\n[%.0f]", descendant.Name, dist), ESPColors.Flowers)
+            else
+                ClearESP(descendant)
+            end
         end
     end
 end
 
 task.spawn(function()
-    while task.wait(0.8) do
-        if _G.Settings.ESP["Player ESP"] then updatePlayerESP() else cleanupCategory("Players") end
-        if _G.Settings.ESP["Chest ESP"] then updateChestESP() else cleanupCategory("Chests") end
-        if _G.Settings.ESP["Fruit ESP"] then updateFruitESP() else cleanupCategory("Fruits") end
-        if _G.Settings.ESP["Flower ESP"] then updateFlowerESP() else cleanupCategory("Flowers") end
-        if _G.Settings.ESP["Raid ESP"] then updateRaidESP() else cleanupCategory("Raids") end
+    while task.wait(1) do
+        pcall(updatePlayerESP)
+        pcall(updateChestESP)
+        pcall(updateFruitESP)
+        pcall(updateFlowerESP)
     end
 end)
 
@@ -1576,18 +1715,6 @@ local function getBoatDisplayName(remoteName)
     end
     return "Pirate Brigade"
 end
-
-local UpdateTab = Window:CreateTab({Name = "Update", Icon = GetIcon("Update"), ImageSource = "Custom", ShowTitle = true})
-UpdateTab:CreateSection("Highlights")
-UpdateTab:CreateParagraph({
-    Title = "Volcano Merge",
-    Text = "- Restored Luna tab parity from Volcano Hub.\n- Remote-only fast attack keeps chat usable.\n- Added world monitors for Prehistoric, Cake Prince, and Elite events."
-})
-UpdateTab:CreateSection("Roadmap")
-UpdateTab:CreateParagraph({
-    Title = "Coming Soon",
-    Text = "- Boss routing presets & mastery lists.\n- Saved Sea/Shop macros across configs.\n- Optional metrics overlay for mastery splits."
-})
 
 local DashboardTab = Window:CreateTab({Name = "Dashboard", Icon = GetIcon("Dashboard"), ImageSource = "Custom", ShowTitle = true})
 DashboardTab:CreateSection("Profile Snapshot")
