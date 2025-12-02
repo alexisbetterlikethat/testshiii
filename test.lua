@@ -273,7 +273,7 @@ local function SendWebhook(title, description, color, fields)
         }
     }
 
-    if fields then
+    if fields and type(fields) == "table" then
         embed["fields"] = fields
     end
     
@@ -293,9 +293,9 @@ end
 local lastHopCheck = os.clock()
 task.spawn(function()
     while task.wait(60) do
-        if _G.Settings.AntiCheat["Bypass"] then
+        if _G.Settings.AntiCheat["Auto Hop"] then
             local elapsedMinutes = (os.clock() - lastHopCheck) / 60
-            if elapsedMinutes >= _G.Settings.AntiCheat["Auto Hop Timer"] then
+            if elapsedMinutes >= (_G.Settings.AntiCheat["Hop Timer"] or 30) then
                 SendWebhook("Anti-Cheat Bypass", "Auto hopping to a new server...", 16776960)
                 TeleportToServer(true)
                 lastHopCheck = os.clock()
@@ -737,7 +737,7 @@ end)
 
 task.spawn(function()
     while true do
-        local delay = (_G.Settings.Configs and _G.Settings.Configs["Fast Attack"]) and 0.02 or 0.06
+        local delay = (_G.Settings.Configs and _G.Settings.Configs["Fast Attack"]) and 0 or 0.06
         task.wait(delay)
         if ShouldAutoClick() then
             local target = GetClosestActiveEnemy(95)
