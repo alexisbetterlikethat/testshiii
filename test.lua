@@ -918,7 +918,8 @@ local function GetClosestEnemy(mobName)
     if not myPos then return nil end
     if workspace:FindFirstChild("Enemies") then
         for _, enemy in ipairs(workspace.Enemies:GetChildren()) do
-            if enemy.Name == mobName and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
+            -- Use string.find for more robust matching (e.g. "Bandit" matches "Bandit [Lv. 5]")
+            if (enemy.Name == mobName or string.find(enemy.Name, mobName)) and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
                 local distance = (enemy.HumanoidRootPart.Position - myPos).Magnitude
                 if distance < minDistance then minDistance = distance; closest = enemy end
             end
@@ -1598,39 +1599,7 @@ task.spawn(function()
     end
 end)
 
--- Shop Automation
-task.spawn(function()
-    while task.wait(8) do
-        if _G.Settings.Shop["Auto Random Fruit"] then
-            pcall(function()
-                ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy")
-            end)
-        end
-    end
-end)
 
-task.spawn(function()
-    while task.wait(6) do
-        if _G.Settings.Shop["Auto Legendary Sword"] then
-            pcall(function()
-                for idx = 1, 3 do
-                    ReplicatedStorage.Remotes.CommF_:InvokeServer("LegendarySwordDealer", tostring(idx))
-                    task.wait(0.2)
-                end
-            end)
-        end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(10) do
-        if _G.Settings.Shop["Auto Enhancement Color"] then
-            pcall(function()
-                ReplicatedStorage.Remotes.CommF_:InvokeServer("ColorsDealer", "2")
-            end)
-        end
-    end
-end)
 
 -- Auto Elite Hunter
 task.spawn(function()
@@ -2148,83 +2117,7 @@ StatsTab:CreateDropdown({
 }, "SelectStat")
 StatsTab:CreateSlider({Name = "Points per Loop", Range = {1, 100}, Increment = 1, CurrentValue = _G.Settings.Stats["Point Select"], Callback = function(v) _G.Settings.Stats["Point Select"] = v end}, "PointsSelect")
 
-local ShopTab = Window:CreateTab({Name = "Shop", Icon = GetIcon("Shop"), ImageSource = "Custom", ShowTitle = true})
-ShopTab:CreateSection("Automation")
-ShopTab:CreateToggle({Name = "Auto Random Fruit", CurrentValue = _G.Settings.Shop["Auto Random Fruit"], Callback = function(v) _G.Settings.Shop["Auto Random Fruit"] = v end}, "AutoRandomFruitShop")
-ShopTab:CreateToggle({Name = "Auto Legendary Sword", CurrentValue = _G.Settings.Shop["Auto Legendary Sword"], Callback = function(v) _G.Settings.Shop["Auto Legendary Sword"] = v end}, "AutoLegendarySword")
-ShopTab:CreateToggle({Name = "Auto Enhancement Color", CurrentValue = _G.Settings.Shop["Auto Enhancement Color"], Callback = function(v) _G.Settings.Shop["Auto Enhancement Color"] = v end}, "AutoEnhancementColor")
-ShopTab:CreateButton({Name = "Buy Random Fruit (Once)", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy")
-end})
-ShopTab:CreateButton({Name = "Buy Haki Color (Once)", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("ColorsDealer", "2")
-end})
 
-ShopTab:CreateSection("Fighting Styles")
-local fightingStyles = {
-    {label = "Black Leg", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyBlackLeg") end},
-    {label = "Electro", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyElectro") end},
-    {label = "Water Kung Fu", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyFishmanKarate") end},
-    {label = "Dragon Claw", remote = function()
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "DragonClaw", "1")
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "DragonClaw", "2")
-    end},
-    {label = "Superhuman", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuySuperhuman") end},
-    {label = "Death Step", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyDeathStep") end},
-    {label = "Sharkman Karate", remote = function()
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("BuySharkmanKarate", true)
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("BuySharkmanKarate")
-    end},
-    {label = "Electric Claw", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyElectricClaw") end},
-    {label = "Dragon Talon", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyDragonTalon") end},
-    {label = "God Human", remote = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyGodhuman") end},
-    {label = "Sanguine Art", remote = function()
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("BuySanguineArt", true)
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("BuySanguineArt")
-    end}
-}
-for _, entry in ipairs(fightingStyles) do
-    ShopTab:CreateButton({Name = "Buy " .. entry.label, Callback = entry.remote})
-end
-
-ShopTab:CreateSection("Abilities & Utility")
-ShopTab:CreateButton({Name = "Buy Geppo", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyHaki", "Geppo")
-end})
-ShopTab:CreateButton({Name = "Buy Buso", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyHaki", "Buso")
-end})
-ShopTab:CreateButton({Name = "Buy Soru", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyHaki", "Soru")
-end})
-ShopTab:CreateButton({Name = "Buy Observation", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("KenTalk", "Buy")
-end})
-
-ShopTab:CreateSection("Legendary Rolls")
-ShopTab:CreateButton({Name = "Legendary Sword Cycle", Callback = function()
-    for idx = 1, 3 do
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("LegendarySwordDealer", tostring(idx))
-        task.wait(0.2)
-    end
-end})
-ShopTab:CreateButton({Name = "Race Reroll", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "Reroll", "1")
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "Reroll", "2")
-end})
-ShopTab:CreateButton({Name = "Stat Refund", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "Refund", "1")
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BlackbeardReward", "Refund", "2")
-end})
-ShopTab:CreateButton({Name = "Buy Black Cape", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyItem", "Black Cape")
-end})
-ShopTab:CreateButton({Name = "Buy Swordsman Hat", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyItem", "Swordsman Hat")
-end})
-ShopTab:CreateButton({Name = "Buy Tomoe Ring", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyItem", "Tomoe Ring")
-end})
 
 local FruitTab = Window:CreateTab({Name = "Fruits", Icon = GetIcon("Fruit"), ImageSource = "Custom", ShowTitle = true})
 FruitTab:CreateSection("Sniper")
