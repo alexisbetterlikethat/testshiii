@@ -497,17 +497,18 @@ local FastAttack
 local lastBasicAttack = 0
 local function PerformBasicAttack()
     local fastAttack = _G.Settings.Configs and _G.Settings.Configs["Fast Attack"]
-    local cooldown = fastAttack and 0.025 or 0.09
+    if fastAttack then
+        pcall(function()
+            FastAttack:AttackNearest()
+        end)
+        return
+    end
+
+    local cooldown = 0.09
     if os.clock() - lastBasicAttack < cooldown then return end
     lastBasicAttack = os.clock()
     pcall(function()
         FastAttack:AttackNearest()
-        if fastAttack then
-            FastAttack:AttackNearest()
-            task.delay(0.01, function()
-                FastAttack:AttackNearest()
-            end)
-        end
     end)
 end
 
@@ -1223,10 +1224,14 @@ local function BringMob(target)
             if distance < 350 then 
                 enemy.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame
                 enemy.HumanoidRootPart.CanCollide = false
-                enemy.HumanoidRootPart.Size = Vector3.new(60, 60, 60)
+                enemy.HumanoidRootPart.Size = Vector3.new(2, 2, 2) -- Small size to prevent physics glitching
                 enemy.Humanoid.WalkSpeed = 0
                 enemy.Humanoid.JumpPower = 0
                 enemy.Humanoid.PlatformStand = true
+                if enemy.Humanoid:FindFirstChild("Animator") then
+                    enemy.Humanoid.Animator:Destroy()
+                end
+                enemy.Humanoid:ChangeState(11) -- StrafingNoPhysics
                 if enemy:FindFirstChild("Head") then enemy.Head.CanCollide = false end
             end
         end
@@ -1292,13 +1297,15 @@ task.spawn(function()
                             
                             -- Modify Enemy (Stun)
                             enemyRoot.CanCollide = false
-                            enemyRoot.Size = Vector3.new(60, 60, 60)
+                            enemyRoot.Size = Vector3.new(60, 60, 60) -- Keep target big for hitting
                             enemyHumanoid.WalkSpeed = 0
                             enemyHumanoid.JumpPower = 0
                             if targetEnemy:FindFirstChild("Head") then targetEnemy.Head.CanCollide = false end
                             
                             -- Bring Neighbors
-                            BringMob(targetEnemy)
+                            if _G.Settings.Main["Mob Aura"] then -- Only bring if Aura is enabled or we want it
+                                BringMob(targetEnemy)
+                            end
                             
                             -- Attack
                             if EquipPreferredWeapon() then
@@ -1677,55 +1684,7 @@ task.spawn(function()
     end
 end)
 
--- Sea Event Automation
-task.spawn(function()
-    while task.wait(0.25) do
-        if _G.Settings.Sea["Auto Sea Beast"] then
-            pcall(function()
-                local target = GetNearestModelWithRoot(workspace:FindFirstChild("SeaBeasts"))
-                if target then
-                    EngageSeaTarget(target, 95)
-                end
-            end)
-        end
-    end
-end)
 
-task.spawn(function()
-    while task.wait(0.25) do
-        if _G.Settings.Sea["Auto Terror Shark"] then
-            pcall(function()
-                local target = GetClosestEnemy("Terrorshark")
-                if not target then
-                    target = workspace:FindFirstChild("Terrorshark")
-                end
-                if target then
-                    EngageSeaTarget(target, 70)
-                end
-            end)
-        end
-    end
-end)
-
-local SeaEnemyTargets = {
-    ["Auto Sea Mobs"] = {"Shark", "Piranha", "Fish Crew Member", "Fish Crew", "Fishman Raider"},
-    ["Auto Pirate Raid"] = {"Pirate Basic", "Pirate Captain", "Pirate Brute", "Pirate Admiral", "Fish Crew Member"},
-}
-
-for setting, mobList in pairs(SeaEnemyTargets) do
-    task.spawn(function()
-        while task.wait(0.25) do
-            if _G.Settings.Sea[setting] then
-                pcall(function()
-                    local enemy = GetClosestEnemyFromList(mobList)
-                    if enemy and enemy:FindFirstChild("HumanoidRootPart") then
-                        ApproachEnemy(enemy, 32)
-                    end
-                end)
-            end
-        end
-    end)
-end
 
 local ESPColors = {
     Players = Color3.fromRGB(0, 170, 255),
@@ -2186,54 +2145,7 @@ RaidTab:CreateDropdown({
 }, "SelectChip")
 RaidTab:CreateToggle({Name = "Auto Awaken", CurrentValue = _G.Settings.Raid["Auto Awaken"], Callback = function(v) _G.Settings.Raid["Auto Awaken"] = v end}, "AutoAwaken")
 
-local TravelTab = Window:CreateTab({Name = "Travel", Icon = GetIcon("Travel"), ImageSource = "Custom", ShowTitle = true})
-TravelTab:CreateSection("Teleport")
-TravelTab:CreateDropdown({
-    Name = "Select Destination",
-    Options = TravelOptions,
-    CurrentOption = {_G.Settings.Teleport["Select Island"]},
-    Callback = function(v)
-        _G.Settings.Teleport["Select Island"] = unwrapOption(v)
-    end
-}, "SelectIsland")
-TravelTab:CreateButton({Name = "Teleport", Callback = function()
-    local selection = _G.Settings.Teleport["Select Island"]
-    local cframe = TravelLookup[selection]
-    if cframe then toTarget(cframe) end
-end})
 
-local SeaTab = Window:CreateTab({Name = "Sea", Icon = GetIcon("Sea"), ImageSource = "Custom", ShowTitle = true})
-SeaTab:CreateSection("World Travel")
-SeaTab:CreateButton({Name = "Travel to Sea 1", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelMain")
-end})
-SeaTab:CreateButton({Name = "Travel to Sea 2", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelDressrosa")
-end})
-SeaTab:CreateButton({Name = "Travel to Sea 3", Callback = function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelZou")
-end})
-
-SeaTab:CreateSection("Boats")
-SeaTab:CreateDropdown({
-    Name = "Select Boat",
-    Options = BoatDropdownOptions,
-    CurrentOption = {getBoatDisplayName(_G.Settings.Sea["Selected Boat"])},
-    Callback = function(v)
-        local display = unwrapOption(v)
-        _G.Settings.Sea["Selected Boat"] = BoatDisplayLookup[display] or "PirateBrigade"
-    end
-}, "SelectBoat")
-SeaTab:CreateButton({Name = "Buy Selected Boat", Callback = function()
-    local boat = _G.Settings.Sea["Selected Boat"] or "PirateBrigade"
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyBoat", boat)
-end})
-
-SeaTab:CreateSection("Events")
-SeaTab:CreateToggle({Name = "Auto Sea Beast", CurrentValue = _G.Settings.Sea["Auto Sea Beast"], Callback = function(v) _G.Settings.Sea["Auto Sea Beast"] = v end}, "AutoSeaBeast")
-SeaTab:CreateToggle({Name = "Auto Terror Shark", CurrentValue = _G.Settings.Sea["Auto Terror Shark"], Callback = function(v) _G.Settings.Sea["Auto Terror Shark"] = v end}, "AutoTerrorShark")
-SeaTab:CreateToggle({Name = "Auto Sea Mobs", CurrentValue = _G.Settings.Sea["Auto Sea Mobs"], Callback = function(v) _G.Settings.Sea["Auto Sea Mobs"] = v end}, "AutoSeaMobs")
-SeaTab:CreateToggle({Name = "Auto Pirate Raid", CurrentValue = _G.Settings.Sea["Auto Pirate Raid"], Callback = function(v) _G.Settings.Sea["Auto Pirate Raid"] = v end}, "AutoPirateRaid")
 
 local ESPTab = Window:CreateTab({Name = "ESP", Icon = GetIcon("ESP"), ImageSource = "Custom", ShowTitle = true})
 ESPTab:CreateSection("Visual Helpers")
