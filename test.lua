@@ -530,6 +530,10 @@ local function DisableNoclip()
     if char and char:FindFirstChild("HumanoidRootPart") then
         local bv = char.HumanoidRootPart:FindFirstChild("BodyClip")
         if bv then bv:Destroy() end
+        
+        if char:FindFirstChild("Humanoid") then
+            char.Humanoid.PlatformStand = false
+        end
     end
 end
 
@@ -557,6 +561,7 @@ local function toTarget(targetPos)
 
     local Distance = (targetCFrame.Position - RootPart.Position).Magnitude
     
+    -- Redz Logic Speed
     local Speed = 350
     if Distance < 250 then Speed = 600 end
     if Distance > 1000 then Speed = 350 end 
@@ -564,8 +569,11 @@ local function toTarget(targetPos)
     local TweenInfo = TweenInfo.new(Distance / Speed, Enum.EasingStyle.Linear)
     if activeTween then activeTween:Cancel() end
     
-    -- Enable Noclip during Tween
+    -- Enable Noclip & PlatformStand (Fixes Bouncing)
     EnableNoclip()
+    if Character:FindFirstChild("Humanoid") then
+        Character.Humanoid.PlatformStand = true
+    end
     
     local Tween = TweenService:Create(RootPart, TweenInfo, {CFrame = targetCFrame})
     activeTween = Tween
@@ -573,11 +581,9 @@ local function toTarget(targetPos)
     Tween.Completed:Connect(function()
         if activeTween == Tween then
             activeTween = nil
-            DisableNoclip() -- Disable Noclip when done
+            DisableNoclip()
         end
     end)
-    
-    if Character:FindFirstChild("Humanoid") then Character.Humanoid.Sit = true end
     
     Tween:Play()
     return Tween
@@ -589,7 +595,20 @@ local function ApproachEnemy(enemy, hoverHeight)
     local humanoid = enemy:FindFirstChildOfClass("Humanoid")
     if not hrp or not humanoid or humanoid.Health <= 0 then return end
     AnchorEnemy(enemy)
-    toTarget(hrp.CFrame * CFrame.new(0, hoverHeight or 30, 0))
+    
+    local targetCFrame = hrp.CFrame * CFrame.new(0, hoverHeight or 30, 0)
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    
+    if myRoot and (myRoot.Position - targetCFrame.Position).Magnitude < 50 then
+        myRoot.CFrame = targetCFrame
+        myRoot.Velocity = Vector3.zero
+        if LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.PlatformStand = true
+        end
+    else
+        toTarget(targetCFrame)
+    end
+
     if EquipPreferredWeapon() then
         EnsureHaki()
         ReleaseSit()
@@ -1106,7 +1125,25 @@ local function GetNearestFruitTool()
     return nearest
 end
 
--- Auto Farm Level
+local function BringMob(target)
+    if not target or not target:FindFirstChild("HumanoidRootPart") then return end
+    if not workspace:FindFirstChild("Enemies") then return end
+    for _, enemy in ipairs(workspace.Enemies:GetChildren()) do
+        if enemy ~= target and enemy.Name == target.Name and enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
+            local distance = (enemy.HumanoidRootPart.Position - target.HumanoidRootPart.Position).Magnitude
+            if distance < 350 then 
+                enemy.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame
+                enemy.HumanoidRootPart.CanCollide = false
+                enemy.HumanoidRootPart.Size = Vector3.new(60, 60, 60)
+                enemy.Humanoid.WalkSpeed = 0
+                enemy.Humanoid.PlatformStand = true
+                if enemy:FindFirstChild("Head") then enemy.Head.CanCollide = false end
+            end
+        end
+    end
+end
+
+-- Auto Farm Level (Redz Logic)
 task.spawn(function()
     while task.wait() do
         if _G.Settings.Main["Auto Farm Level"] and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -1114,29 +1151,49 @@ task.spawn(function()
                 local level = LocalPlayer.Data.Level.Value
                 local questData = GetQuestData(level)
                 if not questData then return end
-                local fastFarm = _G.Settings.Main["Fast Auto Farm Level"]
-                local questReach = fastFarm and 25 or 10
-                local questOffset = fastFarm and CFrame.new(0, 40, 0) or CFrame.new()
-                local hoverHeight = fastFarm and 20 or 28
                 
-                local hasQuest = false
                 local questGui = LocalPlayer.PlayerGui:FindFirstChild("Main") and LocalPlayer.PlayerGui.Main:FindFirstChild("Quest")
-                if questGui and questGui.Visible then hasQuest = true end
-
+                local hasQuest = questGui and questGui.Visible and (string.find(questGui.Container.QuestTitle.Title.Text, questData.Mob) or string.find(questGui.Container.QuestTitle.Title.Text, "Boss"))
+                
                 if not hasQuest then
-                    if (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude > questReach then
-                        toTarget(questData.NPCPos * questOffset)
+                    if (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude > 10 then
+                        toTarget(questData.NPCPos)
                     else
                         ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", questData.Quest, questData.QuestNum)
                         task.wait(0.5)
                     end
                 else
                     local targetEnemy = GetClosestEnemy(questData.Mob)
-                    if targetEnemy then
-                        ApproachEnemy(targetEnemy, hoverHeight)
+                    if targetEnemy and targetEnemy:FindFirstChild("HumanoidRootPart") and targetEnemy:FindFirstChild("Humanoid") and targetEnemy.Humanoid.Health > 0 then
+                        -- Teleport Above Mob
+                        local farmPos = targetEnemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0)
+                        
+                        -- Stabilize if close
+                        if (LocalPlayer.Character.HumanoidRootPart.Position - farmPos.Position).Magnitude < 50 then
+                             LocalPlayer.Character.HumanoidRootPart.CFrame = farmPos
+                             LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
+                             if LocalPlayer.Character:FindFirstChild("Humanoid") then
+                                LocalPlayer.Character.Humanoid.PlatformStand = true
+                             end
+                        else
+                             toTarget(farmPos)
+                        end
+                        
+                        -- Bring Mobs
+                        BringMob(targetEnemy)
+                        
+                        -- Attack
+                        if EquipPreferredWeapon() then
+                            EnsureHaki()
+                            ReleaseSit()
+                            PerformBasicAttack()
+                            if _G.Settings.Configs["Fast Attack"] then
+                                FastAttack:AttackNearest()
+                            end
+                        end
                     else
-                        local fallbackOffset = fastFarm and CFrame.new(0, 65, 0) or CFrame.new(0, 50, 0)
-                        toTarget(questData.NPCPos * fallbackOffset)
+                        -- Mob not found, hover above quest giver area
+                        toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
                     end
                 end
             end)
@@ -1156,7 +1213,7 @@ task.spawn(function()
                 -- Stuck Check Logic
                 if chest then
                     if currentChest == chest then
-                        if os.clock() - chestStart > 5 then
+                        if os.clock() - chestStart > 15 then
                             ChestBlacklist[chest] = true
                             currentChest = nil
                             return
@@ -1912,7 +1969,7 @@ local MainTab = Window:CreateTab({Name = "Main", Icon = GetIcon("Main"), ImageSo
 
 MainTab:CreateSection("Farming")
 MainTab:CreateToggle({Name = "Auto Farm Level", CurrentValue = _G.Settings.Main["Auto Farm Level"], Callback = function(v) _G.Settings.Main["Auto Farm Level"] = v end}, "AutoFarmLevel")
-MainTab:CreateToggle({Name = "Fast Auto Farm Level", CurrentValue = _G.Settings.Main["Fast Auto Farm Level"], Callback = function(v) _G.Settings.Main["Fast Auto Farm Level"] = v end}, "FastAutoFarmLevel")
+-- Fast Auto Farm Removed
 MainTab:CreateToggle({Name = "Auto Farm Bone", CurrentValue = _G.Settings.Main["Auto Farm Bone"], Callback = function(v) _G.Settings.Main["Auto Farm Bone"] = v end}, "AutoFarmBone")
 MainTab:CreateToggle({Name = "Auto Elite Hunter", CurrentValue = _G.Settings.Main["Auto Elite Hunter"], Callback = function(v) _G.Settings.Main["Auto Elite Hunter"] = v end}, "AutoEliteHunter")
 
