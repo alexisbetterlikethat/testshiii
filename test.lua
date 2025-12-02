@@ -123,20 +123,20 @@ local firetouchinterestFn = rawget(_G, "firetouchinterest")
 local activeTween
 
 local TabIcons = {
-    Default = "rbxassetid://6034509993",
-    Update = "rbxassetid://6034509993",
-    Dashboard = "rbxassetid://6031265976",
-    Main = "rbxassetid://6034987535",
-    Stats = "rbxassetid://6034986928",
-    Shop = "rbxassetid://6034509991",
-    Materials = "rbxassetid://6035047377",
-    Bones = "rbxassetid://6035038705",
-    Raid = "rbxassetid://6034990842",
-    Travel = "rbxassetid://6035047409",
-    Sea = "rbxassetid://6034754445",
-    ESP = "rbxassetid://6034527794",
-    Settings = "rbxassetid://6034509990",
-    Fruit = "rbxassetid://6031075931"
+    Default = "menu",
+    Update = "badge-alert",
+    Dashboard = "layout-dashboard",
+    Main = "sword",
+    Stats = "bar-chart-3",
+    Shop = "shopping-bag",
+    Materials = "boxes",
+    Bones = "bone",
+    Raid = "shield-half",
+    Travel = "map",
+    Sea = "anchor",
+    ESP = "eye",
+    Settings = "settings",
+    Fruit = "apple"
 }
 
 local function GetIcon(name)
