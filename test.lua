@@ -123,20 +123,20 @@ local firetouchinterestFn = rawget(_G, "firetouchinterest")
 local activeTween
 
 local TabIcons = {
-    Default = "menu",
-    Update = "notifications",
-    Dashboard = "dashboard",
-    Main = "star",
-    Stats = "bar_chart",
-    Shop = "shopping_bag",
-    Materials = "inventory",
-    Bones = "texture",
-    Raid = "security",
-    Travel = "map",
-    Sea = "anchor",
-    ESP = "preview",
-    Settings = "settings",
-    Fruit = "fastfood"
+    Default = "6031097225",
+    Update = "6034308946",
+    Dashboard = "6022668883",
+    Main = "6031068423",
+    Stats = "6034898096",
+    Shop = "6031265970",
+    Materials = "6035056487",
+    Bones = "6023565892",
+    Raid = "6034848746",
+    Travel = "6034684930",
+    Sea = "6023426906",
+    ESP = "6031260793",
+    Settings = "6031280882",
+    Fruit = "6034744034"
 }
 
 local function GetIcon(name)
@@ -1577,7 +1577,7 @@ local function getBoatDisplayName(remoteName)
     return "Pirate Brigade"
 end
 
-local UpdateTab = Window:CreateTab({Name = "Update", Icon = GetIcon("Update"), ShowTitle = true})
+local UpdateTab = Window:CreateTab({Name = "Update", Icon = GetIcon("Update"), ImageSource = "Custom", ShowTitle = true})
 UpdateTab:CreateSection("Highlights")
 UpdateTab:CreateParagraph({
     Title = "Volcano Merge",
@@ -1589,7 +1589,7 @@ UpdateTab:CreateParagraph({
     Text = "- Boss routing presets & mastery lists.\n- Saved Sea/Shop macros across configs.\n- Optional metrics overlay for mastery splits."
 })
 
-local DashboardTab = Window:CreateTab({Name = "Dashboard", Icon = GetIcon("Dashboard"), ShowTitle = true})
+local DashboardTab = Window:CreateTab({Name = "Dashboard", Icon = GetIcon("Dashboard"), ImageSource = "Custom", ShowTitle = true})
 DashboardTab:CreateSection("Profile Snapshot")
 local ProfileStatusParagraph = DashboardTab:CreateParagraph({
     Title = "Profile Snapshot",
@@ -1781,7 +1781,7 @@ task.spawn(function()
     end
 end)
 
-local MainTab = Window:CreateTab({Name = "Main", Icon = GetIcon("Main"), ShowTitle = true})
+local MainTab = Window:CreateTab({Name = "Main", Icon = GetIcon("Main"), ImageSource = "Custom", ShowTitle = true})
 
 MainTab:CreateSection("Farming")
 MainTab:CreateToggle({Name = "Auto Farm Level", CurrentValue = _G.Settings.Main["Auto Farm Level"], Callback = function(v) _G.Settings.Main["Auto Farm Level"] = v end}, "AutoFarmLevel")
@@ -1839,7 +1839,7 @@ MainTab:CreateToggle({Name = "Auto Collect Berry Hop", CurrentValue = _G.Setting
     _G.Settings.Main["Auto Collect Berry Hop"] = v
 end}, "AutoCollectBerryHop")
 
-local StatsTab = Window:CreateTab({Name = "Stats", Icon = GetIcon("Stats"), ShowTitle = true})
+local StatsTab = Window:CreateTab({Name = "Stats", Icon = GetIcon("Stats"), ImageSource = "Custom", ShowTitle = true})
 StatsTab:CreateToggle({Name = "Auto Stats", CurrentValue = _G.Settings.Stats["Enabled Auto Stats"], Callback = function(v) _G.Settings.Stats["Enabled Auto Stats"] = v end}, "AutoStats")
 StatsTab:CreateDropdown({
     Name = "Select Stat",
@@ -1851,7 +1851,7 @@ StatsTab:CreateDropdown({
 }, "SelectStat")
 StatsTab:CreateSlider({Name = "Points per Loop", Range = {1, 100}, Increment = 1, CurrentValue = _G.Settings.Stats["Point Select"], Callback = function(v) _G.Settings.Stats["Point Select"] = v end}, "PointsSelect")
 
-local ShopTab = Window:CreateTab({Name = "Shop", Icon = GetIcon("Shop"), ShowTitle = true})
+local ShopTab = Window:CreateTab({Name = "Shop", Icon = GetIcon("Shop"), ImageSource = "Custom", ShowTitle = true})
 ShopTab:CreateSection("Automation")
 ShopTab:CreateToggle({Name = "Auto Random Fruit", CurrentValue = _G.Settings.Shop["Auto Random Fruit"], Callback = function(v) _G.Settings.Shop["Auto Random Fruit"] = v end}, "AutoRandomFruitShop")
 ShopTab:CreateToggle({Name = "Auto Legendary Sword", CurrentValue = _G.Settings.Shop["Auto Legendary Sword"], Callback = function(v) _G.Settings.Shop["Auto Legendary Sword"] = v end}, "AutoLegendarySword")
@@ -1929,7 +1929,7 @@ ShopTab:CreateButton({Name = "Buy Tomoe Ring", Callback = function()
     ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyItem", "Tomoe Ring")
 end})
 
-local FruitTab = Window:CreateTab({Name = "Fruits", Icon = GetIcon("Fruit"), ShowTitle = true})
+local FruitTab = Window:CreateTab({Name = "Fruits", Icon = GetIcon("Fruit"), ImageSource = "Custom", ShowTitle = true})
 FruitTab:CreateSection("Sniper")
 FruitTab:CreateDropdown({
     Name = "Select Fruit",
@@ -1969,7 +1969,7 @@ FruitTab:CreateToggle({Name = "Tween To Nearest Fruit", CurrentValue = _G.Settin
     if v then _G.Settings.Fruit["Bring To Fruit"] = false end
 end}, "TweenFruit")
 
-local MaterialsTab = Window:CreateTab({Name = "Materials", Icon = GetIcon("Materials"), ShowTitle = true})
+local MaterialsTab = Window:CreateTab({Name = "Materials", Icon = GetIcon("Materials"), ImageSource = "Custom", ShowTitle = true})
 MaterialsTab:CreateToggle({Name = "Auto Farm Material", CurrentValue = _G.Settings.Materials["Auto Farm Material"], Callback = function(v) _G.Settings.Materials["Auto Farm Material"] = v end}, "AutoFarmMaterial")
 MaterialsTab:CreateDropdown({
     Name = "Select Material",
@@ -1980,10 +1980,10 @@ MaterialsTab:CreateDropdown({
     end
 }, "SelectMaterial")
 
-local BonesTab = Window:CreateTab({Name = "Bones", Icon = GetIcon("Bones"), ShowTitle = true})
+local BonesTab = Window:CreateTab({Name = "Bones", Icon = GetIcon("Bones"), ImageSource = "Custom", ShowTitle = true})
 BonesTab:CreateToggle({Name = "Auto Random Bone", CurrentValue = _G.Settings.Bones["Auto Random Bone"], Callback = function(v) _G.Settings.Bones["Auto Random Bone"] = v end}, "AutoRandomBone")
 
-local RaidTab = Window:CreateTab({Name = "Raid", Icon = GetIcon("Raid"), ShowTitle = true})
+local RaidTab = Window:CreateTab({Name = "Raid", Icon = GetIcon("Raid"), ImageSource = "Custom", ShowTitle = true})
 RaidTab:CreateToggle({Name = "Auto Start Raid", CurrentValue = _G.Settings.Raid["Auto Start Raid"], Callback = function(v) _G.Settings.Raid["Auto Start Raid"] = v end}, "AutoStartRaid")
 RaidTab:CreateToggle({Name = "Auto Buy Chip", CurrentValue = _G.Settings.Raid["Auto Buy Chip"], Callback = function(v) _G.Settings.Raid["Auto Buy Chip"] = v end}, "AutoBuyChip")
 RaidTab:CreateDropdown({
@@ -1996,7 +1996,7 @@ RaidTab:CreateDropdown({
 }, "SelectChip")
 RaidTab:CreateToggle({Name = "Auto Awaken", CurrentValue = _G.Settings.Raid["Auto Awaken"], Callback = function(v) _G.Settings.Raid["Auto Awaken"] = v end}, "AutoAwaken")
 
-local TravelTab = Window:CreateTab({Name = "Travel", Icon = GetIcon("Travel"), ShowTitle = true})
+local TravelTab = Window:CreateTab({Name = "Travel", Icon = GetIcon("Travel"), ImageSource = "Custom", ShowTitle = true})
 TravelTab:CreateSection("Teleport")
 TravelTab:CreateDropdown({
     Name = "Select Destination",
@@ -2012,7 +2012,7 @@ TravelTab:CreateButton({Name = "Teleport", Callback = function()
     if cframe then toTarget(cframe) end
 end})
 
-local SeaTab = Window:CreateTab({Name = "Sea", Icon = GetIcon("Sea"), ShowTitle = true})
+local SeaTab = Window:CreateTab({Name = "Sea", Icon = GetIcon("Sea"), ImageSource = "Custom", ShowTitle = true})
 SeaTab:CreateSection("World Travel")
 SeaTab:CreateButton({Name = "Travel to Sea 1", Callback = function()
     ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelMain")
@@ -2045,7 +2045,7 @@ SeaTab:CreateToggle({Name = "Auto Terror Shark", CurrentValue = _G.Settings.Sea[
 SeaTab:CreateToggle({Name = "Auto Sea Mobs", CurrentValue = _G.Settings.Sea["Auto Sea Mobs"], Callback = function(v) _G.Settings.Sea["Auto Sea Mobs"] = v end}, "AutoSeaMobs")
 SeaTab:CreateToggle({Name = "Auto Pirate Raid", CurrentValue = _G.Settings.Sea["Auto Pirate Raid"], Callback = function(v) _G.Settings.Sea["Auto Pirate Raid"] = v end}, "AutoPirateRaid")
 
-local ESPTab = Window:CreateTab({Name = "ESP", Icon = GetIcon("ESP"), ShowTitle = true})
+local ESPTab = Window:CreateTab({Name = "ESP", Icon = GetIcon("ESP"), ImageSource = "Custom", ShowTitle = true})
 ESPTab:CreateSection("Visual Helpers")
 ESPTab:CreateToggle({Name = "Player ESP", CurrentValue = _G.Settings.ESP["Player ESP"], Callback = function(v) _G.Settings.ESP["Player ESP"] = v end}, "PlayerESP")
 ESPTab:CreateToggle({Name = "Chest ESP", CurrentValue = _G.Settings.ESP["Chest ESP"], Callback = function(v) _G.Settings.ESP["Chest ESP"] = v end}, "ChestESP")
@@ -2053,7 +2053,7 @@ ESPTab:CreateToggle({Name = "Fruit ESP", CurrentValue = _G.Settings.ESP["Fruit E
 ESPTab:CreateToggle({Name = "Flower ESP", CurrentValue = _G.Settings.ESP["Flower ESP"], Callback = function(v) _G.Settings.ESP["Flower ESP"] = v end}, "FlowerESP")
 ESPTab:CreateToggle({Name = "Raid ESP", CurrentValue = _G.Settings.ESP["Raid ESP"], Callback = function(v) _G.Settings.ESP["Raid ESP"] = v end}, "RaidESP")
 
-local SettingsTab = Window:CreateTab({Name = "Settings", Icon = GetIcon("Settings"), ShowTitle = true})
+local SettingsTab = Window:CreateTab({Name = "Settings", Icon = GetIcon("Settings"), ImageSource = "Custom", ShowTitle = true})
 SettingsTab:CreateSection("Utilities")
 SettingsTab:CreateButton({Name = "Server Hop", Callback = function() ServerHop() end})
 SettingsTab:CreateButton({Name = "Stop Tween (Emergency)", Callback = function() StopTween() end})
