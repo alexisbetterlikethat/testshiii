@@ -1238,6 +1238,24 @@ local function BringMob(target)
     end
 end
 
+local function GetMobSpawnPosition(mobName)
+    if not workspace:FindFirstChild("EnemySpawns") then return nil end
+    local bestMatch, minLen = nil, math.huge
+    
+    -- Clean up mob name for matching (remove Lv. and numbers)
+    local cleanName = mobName:gsub("Lv%.", ""):gsub("[%[%]]", ""):gsub("%d+", ""):gsub("%s+$", ""):gsub("^%s+", "")
+    
+    for _, spawnPoint in ipairs(workspace.EnemySpawns:GetChildren()) do
+        if spawnPoint:IsA("BasePart") then
+            -- Check for exact or partial match
+            if spawnPoint.Name == mobName or spawnPoint.Name == cleanName or string.find(spawnPoint.Name, cleanName) or string.find(mobName, spawnPoint.Name) then
+                return spawnPoint.CFrame
+            end
+        end
+    end
+    return nil
+end
+
 -- Auto Farm Level (Redz Logic - Re-implemented)
 task.spawn(function()
     while task.wait() do
@@ -1317,10 +1335,14 @@ task.spawn(function()
                                 end
                             end
                         else
-                            -- Mob not found: Hover at Spawn Point (Don't fly around)
-                            -- We use the Quest Giver position + offset as a fallback spawn point approximation
-                            -- Ideally we'd have exact spawn points, but this is a safe fallback.
-                            toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
+                            -- Mob not found: Go to Spawn Point
+                            local spawnPos = GetMobSpawnPosition(questData.Mob)
+                            if spawnPos then
+                                toTarget(spawnPos * CFrame.new(0, 50, 0))
+                            else
+                                -- Fallback: Hover at Quest Giver (only if spawn not found)
+                                toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
+                            end
                         end
                     end
                 end)
@@ -1333,7 +1355,7 @@ local currentChest = nil
 local chestStart = 0
 
 task.spawn(function()
-    while task.wait(0.3) do
+    while task.wait() do
         if _G.Settings.Main["Auto Farm Chest"] then
             pcall(function()
                 local chest = GetBestChest()
@@ -1341,7 +1363,7 @@ task.spawn(function()
                 -- Stuck Check Logic
                 if chest then
                     if currentChest == chest then
-                        if os.clock() - chestStart > 15 then
+                        if os.clock() - chestStart > 5 then -- Reduced to 5 seconds
                             ChestBlacklist[chest] = true
                             currentChest = nil
                             return
@@ -1359,13 +1381,21 @@ task.spawn(function()
                 if chest and root then
                     chestDryCounter = 0
                     local destination = CFrame.new(chest.Position + Vector3.new(0, 3, 0))
-                    toTarget(destination)
-                    if (root.Position - chest.Position).Magnitude < 10 and firetouchinterestFn then
+                    
+                    -- Smarter Movement: Direct TP if close
+                    if (root.Position - chest.Position).Magnitude < 50 then
+                        root.CFrame = destination
+                        root.Velocity = Vector3.zero
+                    else
+                        toTarget(destination)
+                    end
+
+                    if (root.Position - chest.Position).Magnitude < 15 and firetouchinterestFn then
                         firetouchinterestFn(root, chest, 0)
                         firetouchinterestFn(root, chest, 1)
                     end
                 else
-                    chestDryCounter += 0.3
+                    chestDryCounter = chestDryCounter + 0.05
                     if _G.Settings.Main["Chest Hop When Dry"] and chestDryCounter >= (_G.Settings.Main["Chest Hop Delay"] or 10) then
                         chestDryCounter = 0
                         TeleportToServer(true)
@@ -1376,6 +1406,7 @@ task.spawn(function()
             chestDryCounter = 0
             ChestBlacklist = {}
             currentChest = nil
+            task.wait(1)
         end
     end
 end)
