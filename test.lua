@@ -622,7 +622,31 @@ local function toTarget(targetPos)
     if Distance < 250 then Speed = 600 end
     if Distance > 1000 then Speed = 350 end 
 
-    local TweenInfo = TweenInfo.new(Distance / Speed, Enum.EasingStyle.Linear)
+    -- High Tween Logic (Avoid Water/Mountains)
+    if Distance > 150 then
+        local highY = math.max(RootPart.Position.Y, targetCFrame.Position.Y) + 100
+        if highY < 300 then highY = 300 end -- Minimum safe height
+        
+        local highCFrame = CFrame.new(RootPart.Position.X, highY, RootPart.Position.Z)
+        local targetHighCFrame = CFrame.new(targetCFrame.Position.X, highY, targetCFrame.Position.Z)
+        
+        -- 1. Go Up
+        if math.abs(RootPart.Position.Y - highY) > 20 then
+            local upTweenInfo = TweenInfo.new(math.abs(RootPart.Position.Y - highY) / Speed, Enum.EasingStyle.Linear)
+            local upTween = TweenService:Create(RootPart, upTweenInfo, {CFrame = highCFrame})
+            upTween:Play()
+            upTween.Completed:Wait()
+        end
+        
+        -- 2. Go Across
+        local acrossDist = (highCFrame.Position - targetHighCFrame.Position).Magnitude
+        local acrossTweenInfo = TweenInfo.new(acrossDist / Speed, Enum.EasingStyle.Linear)
+        local acrossTween = TweenService:Create(RootPart, acrossTweenInfo, {CFrame = targetHighCFrame})
+        acrossTween:Play()
+        acrossTween.Completed:Wait()
+    end
+
+    local TweenInfo = TweenInfo.new((targetCFrame.Position - RootPart.Position).Magnitude / Speed, Enum.EasingStyle.Linear)
     if activeTween then activeTween:Cancel() end
     
     -- Enable Noclip & PlatformStand (Fixes Bouncing)
@@ -1258,7 +1282,7 @@ task.spawn(function()
                         end
 
                         -- Go to Quest Giver
-                        if (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude > 10 then
+                        if (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude > 20 then
                             toTarget(questData.NPCPos)
                         else
                             ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", questData.Quest, questData.QuestNum)
@@ -1284,13 +1308,20 @@ task.spawn(function()
                                 end
 
                                 -- Teleport/Tween
-                                local farmPos = enemyRoot.CFrame * CFrame.new(0, 30, 0)
+                                local farmPos = enemyRoot.CFrame * CFrame.new(0, 50, 0) -- Increased height to 50
                                 if (myRoot.Position - farmPos.Position).Magnitude < 50 then
                                     myRoot.CFrame = farmPos
                                     myRoot.Velocity = Vector3.zero
                                     if LocalPlayer.Character:FindFirstChild("Humanoid") then
                                         LocalPlayer.Character.Humanoid.PlatformStand = true
                                     end
+                                    
+                                    -- Anti-Fling: Force Velocity 0
+                                    local bv = myRoot:FindFirstChild("HoldVelocity") or Instance.new("BodyVelocity")
+                                    bv.Name = "HoldVelocity"
+                                    bv.Parent = myRoot
+                                    bv.MaxForce = Vector3.new(100000, 100000, 100000)
+                                    bv.Velocity = Vector3.zero
                                 else
                                     toTarget(farmPos)
                                 end
