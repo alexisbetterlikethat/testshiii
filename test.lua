@@ -28,11 +28,26 @@ _G.Settings = {
         ["Distance Mob Aura"] = 1000,
         ["Mob Aura"] = false,
         ["Auto Farm Chest"] = false,
+        ["Chest Hop When Dry"] = false,
+        ["Chest Hop Delay"] = 10,
+        ["Chest Bypass"] = false,
+        ["Stop Chest On Rare"] = false,
+        ["Auto Collect Berry"] = false,
+        ["Auto Collect Berry Hop"] = false,
         ["Auto Farm Bone"] = false,
         ["Auto Elite Hunter"] = false,
         ["Auto Farm Mastery"] = false,
         ["Mastery Health Threshold"] = 25,
         ["Mastery Weapon"] = "Blox Fruit",
+    },
+    Fruit = {
+        ["Auto Store Fruits"] = false,
+        ["Auto Buy From Sniper"] = false,
+        ["Selected Sniper Fruit"] = "Flame-Flame",
+        ["Auto Eat Fruit"] = false,
+        ["Selected Eat Fruit"] = "Flame-Flame",
+        ["Bring To Fruit"] = false,
+        ["Tween To Fruit"] = false,
     },
     Raid = {
         ["Auto Start Raid"] = false,
@@ -95,7 +110,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local VirtualUser = game:GetService("VirtualUser")
 local HttpService = game:GetService("HttpService")
 local CollectionService = game:GetService("CollectionService")
 local TeleportService = game:GetService("TeleportService")
@@ -107,6 +121,65 @@ local CurrentWorld = (game.PlaceId == 2753915549 and 1)
 local fireclickdetectorFn = rawget(_G, "fireclickdetector")
 local firetouchinterestFn = rawget(_G, "firetouchinterest")
 local activeTween
+
+local TabIcons = {
+    Default = "rbxassetid://6034509993",
+    Update = "rbxassetid://6034509993",
+    Dashboard = "rbxassetid://6031265976",
+    Main = "rbxassetid://6034987535",
+    Stats = "rbxassetid://6034986928",
+    Shop = "rbxassetid://6034509991",
+    Materials = "rbxassetid://6035047377",
+    Bones = "rbxassetid://6035038705",
+    Raid = "rbxassetid://6034990842",
+    Travel = "rbxassetid://6035047409",
+    Sea = "rbxassetid://6034754445",
+    ESP = "rbxassetid://6034527794",
+    Settings = "rbxassetid://6034509990",
+    Fruit = "rbxassetid://6031075931"
+}
+
+local function GetIcon(name)
+    return TabIcons[name] or TabIcons.Default
+end
+
+local lastHopAttempt = 0
+local function TeleportToServer(preferLowPop)
+    if os.clock() - lastHopAttempt < 8 then return end
+    lastHopAttempt = os.clock()
+    task.spawn(function()
+        local placeId = game.PlaceId
+        local cursor
+        for _ = 1, 5 do
+            local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId)
+            if cursor then
+                url = url .. "&cursor=" .. cursor
+            end
+            local success, response = pcall(function()
+                return HttpService:JSONDecode(game:HttpGet(url))
+            end)
+            if not success or type(response) ~= "table" or type(response.data) ~= "table" then
+                break
+            end
+            local servers = response.data
+            if preferLowPop then
+                table.sort(servers, function(a, b)
+                    return (a.playing or math.huge) < (b.playing or math.huge)
+                end)
+            end
+            for _, server in ipairs(servers) do
+                if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                    TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
+                    return
+                end
+            end
+            cursor = response.nextPageCursor
+            if not cursor then
+                break
+            end
+        end
+    end)
+end
 
 local function AutoChooseTeam()
     if not _G.Settings.Teams["Auto Select Team"] then return end
@@ -277,26 +350,90 @@ local function ShouldAutoClick()
 end
 
 
+local function formatNumber(value)
+    if typeof(value) ~= "number" then
+        return tostring(value or "?")
+    end
+    local sign = value < 0 and "-" or ""
+    local str = tostring(math.floor(math.abs(value)))
+    local formatted = str:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+    if formatted:sub(1, 1) == "," then
+        formatted = formatted:sub(2)
+    end
+    return sign .. formatted
+end
+
+local accessoryCache = {}
+local lastAccessoryCheck = 0
+local function refreshAccessoryCache()
+    if os.clock() - lastAccessoryCheck < 10 then
+        return
+    end
+    local success, inventory = pcall(function()
+        return ReplicatedStorage.Remotes.CommF_:InvokeServer("getInventory")
+    end)
+    if success and type(inventory) == "table" then
+        accessoryCache = {}
+        for _, item in ipairs(inventory) do
+            if type(item) == "table" and item.Type == "Wear" and item.Name then
+                accessoryCache[item.Name] = true
+            end
+        end
+        lastAccessoryCheck = os.clock()
+    end
+end
+
+local function HasAccessory(name)
+    refreshAccessoryCache()
+    return accessoryCache[name] == true
+end
+
+local function safeSetClipboard(text)
+    if typeof(text) ~= "string" then return end
+    local primary = rawget(_G, "setclipboard")
+    local fallback = rawget(_G, "toclipboard")
+    if type(primary) == "function" then
+        pcall(primary, text)
+    elseif type(fallback) == "function" then
+        pcall(fallback, text)
+    end
+end
+
+local function getWorldName()
+    if CurrentWorld == 1 then
+        return "First Sea"
+    elseif CurrentWorld == 2 then
+        return "Second Sea"
+    elseif CurrentWorld == 3 then
+        return "Third Sea"
+    end
+    return "Unknown Sea"
+end
+
+local DojoBeltSteps = {
+    {name = "Dojo Belt (White)", tip = "Kill 20 quest NPCs while auto farming."},
+    {name = "Dojo Belt (Yellow)", tip = "Defeat 5 Sea mobs during Sea Events."},
+    {name = "Dojo Belt (Orange)", tip = "Complete one fruit trade with the Dealer."},
+    {name = "Dojo Belt (Green)", tip = "Wait 5 minutes on Sea Danger levels 4-6."},
+    {name = "Dojo Belt (Blue)", tip = "Collect a fruit dropped anywhere in the world."},
+    {name = "Dojo Belt (Purple)", tip = "Eliminate 3 Elite Hunters."},
+    {name = "Dojo Belt (Red)", tip = "Defeat a Terror Shark or Rumbling Waters boss."},
+    {name = "Dojo Belt (Black)", tip = "Complete the Prehistoric event and turn in bones."}
+}
+
+local FastAttack
 local lastBasicAttack = 0
 local function PerformBasicAttack()
-    local cooldown = _G.Settings.Configs and _G.Settings.Configs["Fast Attack"] and 0.035 or 0.12
+    local fastAttack = _G.Settings.Configs and _G.Settings.Configs["Fast Attack"]
+    local cooldown = fastAttack and 0.025 or 0.09
     if os.clock() - lastBasicAttack < cooldown then return end
     lastBasicAttack = os.clock()
-    local camera = workspace.CurrentCamera
-    local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
-    local center = Vector2.new(viewport.X / 2, viewport.Y / 2)
     pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:Button1Down(center, camera and camera.CFrame or CFrame.new())
-        task.delay(0.05, function()
-            VirtualUser:Button1Up(center, camera and camera.CFrame or CFrame.new())
-        end)
-        if _G.Settings.Configs and _G.Settings.Configs["Fast Attack"] then
-            task.delay(0.025, function()
-                VirtualUser:Button1Down(center, camera and camera.CFrame or CFrame.new())
-                task.delay(0.03, function()
-                    VirtualUser:Button1Up(center, camera and camera.CFrame or CFrame.new())
-                end)
+        FastAttack:AttackNearest()
+        if fastAttack then
+            FastAttack:AttackNearest()
+            task.delay(0.01, function()
+                FastAttack:AttackNearest()
             end)
         end
     end)
@@ -352,7 +489,7 @@ local function ApproachEnemy(enemy, hoverHeight)
 end
 
 -- Fast Attack
-local FastAttack = {Distance = 100}
+FastAttack = {Distance = 100}
 local RegisterAttack = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RE/RegisterAttack")
 local RegisterHit = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RE/RegisterHit")
 
@@ -526,6 +663,30 @@ if not table.find(TravelOptions, _G.Settings.Teleport["Select Island"]) then
     _G.Settings.Teleport["Select Island"] = TravelOptions[1] or ""
 end
 
+local FruitOptions = {}
+do
+    local success, fruitData = pcall(function()
+        return ReplicatedStorage.Remotes.CommF_:InvokeServer("GetFruits")
+    end)
+    if success and type(fruitData) == "table" then
+        for _, info in ipairs(fruitData) do
+            if type(info) == "table" and info.Name then
+                table.insert(FruitOptions, info.Name)
+            end
+        end
+    end
+    if #FruitOptions == 0 then
+        FruitOptions = {"Flame-Flame", "Light-Light", "Dark-Dark", "Magma-Magma", "Dough-Dough"}
+    end
+    table.sort(FruitOptions)
+end
+if not table.find(FruitOptions, _G.Settings.Fruit["Selected Sniper Fruit"]) then
+    _G.Settings.Fruit["Selected Sniper Fruit"] = FruitOptions[1]
+end
+if not table.find(FruitOptions, _G.Settings.Fruit["Selected Eat Fruit"]) then
+    _G.Settings.Fruit["Selected Eat Fruit"] = FruitOptions[1]
+end
+
 local function GetClosestEnemy(mobName)
     local closest, minDistance = nil, math.huge
     local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
@@ -665,11 +826,24 @@ local function SetSpawnPoint(name)
     end)
 end
 
-local function GetClosestChest()
+local function ScoreChest(part)
+    if not part then return 0 end
+    local tier = part:GetAttribute("Tier")
+    if typeof(tier) == "number" then
+        return tier
+    end
+    local name = part.Name:lower()
+    if name:find("diamond") then return 3 end
+    if name:find("gold") then return 2 end
+    if name:find("silver") then return 1 end
+    return 0.5
+end
+
+local function GetBestChest()
     local character = LocalPlayer.Character
     local root = character and character:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
-    local closest, minDistance = nil, math.huge
+    local best, bestWeight = nil, -math.huge
     local function consider(part)
         if part and part:IsA("BasePart") then
             local parent = part.Parent
@@ -679,9 +853,11 @@ local function GetClosestChest()
             end
             if disabled then return end
             local distance = (part.Position - root.Position).Magnitude
-            if distance < minDistance then
-                minDistance = distance
-                closest = part
+            local score = ScoreChest(part)
+            local weight = score - (distance / 5000)
+            if weight > bestWeight then
+                bestWeight = weight
+                best = part
             end
         end
     end
@@ -696,8 +872,43 @@ local function GetClosestChest()
             end
         end
     end
+    return best
+end
+
+local function GetNearestBerryBush()
+    local character = LocalPlayer.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    local bushes = CollectionService:GetTagged("BerryBush")
+    local closest, minDistance = nil, math.huge
+    for _, berry in ipairs(bushes) do
+        local container = berry.Parent
+        if container and container:IsA("Model") then
+            local pivot = container:GetPivot()
+            local distance = (pivot.Position - root.Position).Magnitude
+            if distance < minDistance then
+                minDistance = distance
+                closest = pivot
+            end
+        end
+    end
     return closest
 end
+
+local lastBerrySighted = 0
+task.spawn(function()
+    while task.wait(0.35) do
+        if _G.Settings.Main["Auto Collect Berry"] then
+            local pivot = GetNearestBerryBush()
+            if pivot then
+                lastBerrySighted = os.clock()
+                toTarget(pivot * CFrame.new(0, 3, 0))
+            elseif _G.Settings.Main["Auto Collect Berry Hop"] and os.clock() - lastBerrySighted > 12 then
+                TeleportToServer(true)
+            end
+        end
+    end
+end)
 
 local function StopTween()
     local character = LocalPlayer.Character
@@ -719,6 +930,58 @@ local function TriggerClickDetector(detector)
     end
 end
 
+local chestDryCounter = 0
+
+local function MatchesFruit(tool, fruitKey)
+    if not (tool and tool:IsA("Tool")) then return false end
+    local original = tool:GetAttribute("OriginalName")
+    if original and original == fruitKey then return true end
+    local normalizedName = tool.Name:gsub(" Fruit", ""):gsub(" ", "-")
+    return normalizedName == fruitKey or (normalizedName .. "-" .. normalizedName == fruitKey)
+end
+
+local function StoreFruitTool(tool)
+    if not (tool and tool:IsA("Tool")) then return end
+    local fruitKey = tool:GetAttribute("OriginalName") or tool.Name:gsub(" Fruit", "")
+    local ok = pcall(function()
+        ReplicatedStorage.Remotes.CommF_:InvokeServer("StoreFruit", fruitKey, tool)
+    end)
+    if not ok then
+        pcall(function()
+            ReplicatedStorage.Remotes.CommF_:InvokeServer("StoreFruit", fruitKey .. "-" .. fruitKey, tool)
+        end)
+    end
+end
+
+local function FindFruitTool(fruitKey)
+    local function search(container)
+        if not container then return nil end
+        for _, tool in ipairs(container:GetChildren()) do
+            if MatchesFruit(tool, fruitKey) then
+                return tool
+            end
+        end
+    end
+    return search(LocalPlayer.Backpack) or search(LocalPlayer.Character)
+end
+
+local function GetNearestFruitTool()
+    local character = LocalPlayer.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    local nearest, minDistance = nil, math.huge
+    for _, inst in ipairs(workspace:GetChildren()) do
+        if inst:IsA("Tool") and inst:FindFirstChild("Handle") and inst.Name:lower():find("fruit") then
+            local dist = (inst.Handle.Position - root.Position).Magnitude
+            if dist < minDistance then
+                minDistance = dist
+                nearest = inst
+            end
+        end
+    end
+    return nearest
+end
+
 -- Auto Farm Level
 task.spawn(function()
     while task.wait() do
@@ -727,14 +990,18 @@ task.spawn(function()
                 local level = LocalPlayer.Data.Level.Value
                 local questData = GetQuestData(level)
                 if not questData then return end
+                local fastFarm = _G.Settings.Main["Fast Auto Farm Level"]
+                local questReach = fastFarm and 25 or 10
+                local questOffset = fastFarm and CFrame.new(0, 40, 0) or CFrame.new()
+                local hoverHeight = fastFarm and 20 or 28
                 
                 local hasQuest = false
                 local questGui = LocalPlayer.PlayerGui:FindFirstChild("Main") and LocalPlayer.PlayerGui.Main:FindFirstChild("Quest")
                 if questGui and questGui.Visible then hasQuest = true end
 
                 if not hasQuest then
-                    if (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude > 10 then
-                        toTarget(questData.NPCPos)
+                    if (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude > questReach then
+                        toTarget(questData.NPCPos * questOffset)
                     else
                         ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", questData.Quest, questData.QuestNum)
                         task.wait(0.5)
@@ -742,9 +1009,10 @@ task.spawn(function()
                 else
                     local targetEnemy = GetClosestEnemy(questData.Mob)
                     if targetEnemy then
-                        ApproachEnemy(targetEnemy, 28)
+                        ApproachEnemy(targetEnemy, hoverHeight)
                     else
-                        toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
+                        local fallbackOffset = fastFarm and CFrame.new(0, 65, 0) or CFrame.new(0, 50, 0)
+                        toTarget(questData.NPCPos * fallbackOffset)
                     end
                 end
             end)
@@ -756,14 +1024,119 @@ task.spawn(function()
     while task.wait(0.3) do
         if _G.Settings.Main["Auto Farm Chest"] then
             pcall(function()
-                local chest = GetClosestChest()
+                local chest = GetBestChest()
                 local character = LocalPlayer.Character
                 local root = character and character:FindFirstChild("HumanoidRootPart")
                 if chest and root then
-                    toTarget(chest.CFrame)
+                    chestDryCounter = 0
+                    local destination = CFrame.new(chest.Position + Vector3.new(0, 3, 0))
+                    toTarget(destination)
                     if (root.Position - chest.Position).Magnitude < 10 and firetouchinterestFn then
                         firetouchinterestFn(root, chest, 0)
                         firetouchinterestFn(root, chest, 1)
+                    end
+                else
+                    chestDryCounter += 0.3
+                    if _G.Settings.Main["Chest Hop When Dry"] and chestDryCounter >= (_G.Settings.Main["Chest Hop Delay"] or 10) then
+                        chestDryCounter = 0
+                        TeleportToServer(true)
+                    end
+                end
+            end)
+        else
+            chestDryCounter = 0
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(1.5) do
+        if _G.Settings.Main["Chest Bypass"] then
+            pcall(function()
+                local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+                for _ = 1, 6 do
+                    local chest = GetBestChest()
+                    if not chest then break end
+                    character:PivotTo(CFrame.new(chest.Position + Vector3.new(0, 2, 0)))
+                    task.wait(0.2)
+                end
+                if character and character:FindFirstChildOfClass("Humanoid") then
+                    character:BreakJoints()
+                end
+            end)
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.5) do
+        if _G.Settings.Main["Stop Chest On Rare"] then
+            local backpack = LocalPlayer:FindFirstChild("Backpack")
+            if backpack and (backpack:FindFirstChild("God's Chalice") or backpack:FindFirstChild("Fist of Darkness")) then
+                _G.Settings.Main["Auto Farm Chest"] = false
+                _G.Settings.Main["Chest Bypass"] = false
+                chestDryCounter = 0
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(2) do
+        if _G.Settings.Fruit["Auto Store Fruits"] then
+            pcall(function()
+                local backpack = LocalPlayer:FindFirstChild("Backpack")
+                local character = LocalPlayer.Character
+                local function scan(container)
+                    if not container then return end
+                    for _, tool in ipairs(container:GetChildren()) do
+                        if tool:IsA("Tool") and (tool.ToolTip == "Blox Fruit" or tool.Name:lower():find("fruit")) then
+                            StoreFruitTool(tool)
+                        end
+                    end
+                end
+                scan(backpack)
+                scan(character)
+            end)
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(12) do
+        if _G.Settings.Fruit["Auto Buy From Sniper"] then
+            pcall(function()
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("PurchaseRawFruit", _G.Settings.Fruit["Selected Sniper Fruit"], false)
+            end)
+        end
+    end
+end)
+
+local lastFruitEat = 0
+task.spawn(function()
+    while task.wait(0.5) do
+        if _G.Settings.Fruit["Auto Eat Fruit"] and os.clock() - lastFruitEat > 3 then
+            pcall(function()
+                local tool = FindFruitTool(_G.Settings.Fruit["Selected Eat Fruit"])
+                if tool and tool:FindFirstChild("EatRemote") then
+                    lastFruitEat = os.clock()
+                    tool.EatRemote:InvokeServer()
+                end
+            end)
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.25) do
+        if _G.Settings.Fruit["Bring To Fruit"] or _G.Settings.Fruit["Tween To Fruit"] then
+            pcall(function()
+                local fruit = GetNearestFruitTool()
+                if fruit and fruit:FindFirstChild("Handle") then
+                    if _G.Settings.Fruit["Bring To Fruit"] and LocalPlayer.Character then
+                        LocalPlayer.Character:PivotTo(fruit.Handle.CFrame * CFrame.new(0, 2, 0))
+                    elseif _G.Settings.Fruit["Tween To Fruit"] then
+                        toTarget(fruit.Handle.CFrame * CFrame.new(0, 3, 0))
                     end
                 end
             end)
@@ -1176,54 +1549,7 @@ end)
 
 -- Server Hop
 local function ServerHop()
-    local PlaceID = game.PlaceId
-    local AllIDs = {}
-    local foundAnything = ""
-    local actualHour = os.date("!*t").hour
-    local Deleted = false
-    
-    local function TPReturner()
-        local Site;
-        if foundAnything == "" then
-            Site = game.HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100'))
-        else
-            Site = game.HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100&cursor=' .. foundAnything))
-        end
-        
-        if Site.nextPageCursor and Site.nextPageCursor ~= "null" and Site.nextPageCursor ~= nil then
-            foundAnything = Site.nextPageCursor
-        end
-        
-        for _, v in pairs(Site.data) do
-            local Possible = true
-            local ID = tostring(v.id)
-            if tonumber(v.maxPlayers) > tonumber(v.playing) then
-                for _, Existing in pairs(AllIDs) do
-                    if ID == tostring(Existing) then
-                        Possible = false
-                    end
-                end
-                if Possible then
-                    table.insert(AllIDs, ID)
-                    wait()
-                    pcall(function()
-                        wait()
-                        game:GetService("TeleportService"):TeleportToPlaceInstance(PlaceID, ID, game.Players.LocalPlayer)
-                    end)
-                    wait(4)
-                end
-            end
-        end
-    end
-    
-    while wait() do
-        pcall(function()
-            TPReturner()
-            if foundAnything ~= "" then
-                TPReturner()
-            end
-        end)
-    end
+    TeleportToServer(true)
 end
 
 -- UI Construction
@@ -1251,13 +1577,217 @@ local function getBoatDisplayName(remoteName)
     return "Pirate Brigade"
 end
 
-local MainTab = Window:CreateTab({Name = "Main", Icon = "home", ImageSource = "Material", ShowTitle = true})
+local UpdateTab = Window:CreateTab({Name = "Update", Icon = GetIcon("Update"), ShowTitle = true})
+UpdateTab:CreateSection("Highlights")
+UpdateTab:CreateParagraph({
+    Title = "Volcano Merge",
+    Text = "- Restored Luna tab parity from Volcano Hub.\n- Remote-only fast attack keeps chat usable.\n- Added world monitors for Prehistoric, Cake Prince, and Elite events."
+})
+UpdateTab:CreateSection("Roadmap")
+UpdateTab:CreateParagraph({
+    Title = "Coming Soon",
+    Text = "- Boss routing presets & mastery lists.\n- Saved Sea/Shop macros across configs.\n- Optional metrics overlay for mastery splits."
+})
+
+local DashboardTab = Window:CreateTab({Name = "Dashboard", Icon = GetIcon("Dashboard"), ShowTitle = true})
+DashboardTab:CreateSection("Profile Snapshot")
+local ProfileStatusParagraph = DashboardTab:CreateParagraph({
+    Title = "Profile Snapshot",
+    Text = "Collecting player data..."
+})
+DashboardTab:CreateSection("World Events")
+local PrehistoricParagraph = DashboardTab:CreateParagraph({
+    Title = "Prehistoric Island",
+    Text = "Scanning for relics..."
+})
+local CakePrinceParagraph = DashboardTab:CreateParagraph({
+    Title = "Cake Prince Status",
+    Text = "Waiting for response..."
+})
+local EliteParagraph = DashboardTab:CreateParagraph({
+    Title = "Elite Hunter",
+    Text = "Syncing elite progress..."
+})
+local FruitParagraph = DashboardTab:CreateParagraph({
+    Title = "Fruit Distance Info",
+    Text = "Looking for fruit drops..."
+})
+local MirageParagraph = DashboardTab:CreateParagraph({
+    Title = "Mirage Island",
+    Text = "Checking skyline..."
+})
+DashboardTab:CreateSection("Dojo Tracker")
+local DojoParagraph = DashboardTab:CreateParagraph({
+    Title = "Dojo Belt Progress",
+    Text = "Syncing with Dojo records..."
+})
+DashboardTab:CreateSection("Dojo Tips")
+DashboardTab:CreateParagraph({
+    Title = "Fastest Methods",
+    Text = "- Run Auto Farm Level for the early belts.\n- Enable Sea Event toggles for Yellow/Red progress.\n- Elite Hunter loop finishes Purple automatically."
+})
+DashboardTab:CreateSection("Community")
+DashboardTab:CreateButton({Name = "Copy Discord Invite", Callback = function()
+    safeSetClipboard("https://discord.gg/aerohub")
+end})
+DashboardTab:CreateButton({Name = "Copy YouTube Link", Callback = function()
+    safeSetClipboard("https://youtube.com/@aerohub")
+end})
+DashboardTab:CreateParagraph({
+    Title = "Announcements",
+    Text = "Join the Discord for update pings & bug reporting. Videos showcase farming routes and stat presets."
+})
+
+task.spawn(function()
+    while task.wait(2) do
+        pcall(function()
+            local data = LocalPlayer:FindFirstChild("Data")
+            local function getValue(name, default)
+                local entry = data and data:FindFirstChild(name)
+                return entry and entry.Value or default
+            end
+            local level = getValue("Level", "?")
+            local bounty = getValue("Bounty", 0)
+            local fragments = getValue("Fragments", 0)
+            local race = getValue("Race", "Unknown")
+            local world = getWorldName()
+            local text = string.format(
+                "Level: %s\nBounty: %s\nFragments: %s\nRace: %s\nWorld: %s",
+                formatNumber(level),
+                formatNumber(bounty),
+                formatNumber(fragments),
+                tostring(race),
+                world
+            )
+            ProfileStatusParagraph:Set({Text = text})
+        end)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(4) do
+        pcall(function()
+            local islandActive = false
+            local map = workspace:FindFirstChild("Map")
+            if map and map:FindFirstChild("PrehistoricRelic") then
+                islandActive = true
+            end
+            local worldOrigin = workspace:FindFirstChild("_WorldOrigin")
+            if not islandActive and worldOrigin then
+                local locations = worldOrigin:FindFirstChild("Locations")
+                if locations and locations:FindFirstChild("Prehistoric Island") then
+                    islandActive = true
+                end
+            end
+            local text = islandActive and "Prehistoric Island: Spawned!" or "Prehistoric Island: Not spawned"
+            PrehistoricParagraph:Set({Text = text})
+        end)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(8) do
+        pcall(function()
+            local response = ReplicatedStorage.Remotes.CommF_:InvokeServer("CakePrinceSpawner")
+            local remaining = (type(response) == "string") and response:match("(%d+)")
+            local text = remaining and ("Cake Prince: " .. remaining .. " enemies remaining") or "Cake Prince: Spawned!"
+            CakePrinceParagraph:Set({Text = text})
+        end)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(6) do
+        pcall(function()
+            local status = "No elite detected"
+            local eliteName = "None"
+            for _, candidate in ipairs({"Diablo", "Deandre", "Urban"}) do
+                if (ReplicatedStorage:FindFirstChild(candidate)) or (workspace:FindFirstChild("Enemies") and workspace.Enemies:FindFirstChild(candidate)) then
+                    status = "Elite spawned"
+                    eliteName = candidate
+                    break
+                end
+            end
+            local progress = ReplicatedStorage.Remotes.CommF_:InvokeServer("EliteHunter", "Progress")
+            local text = string.format("Status: %s\nKilled: %s\nTarget: %s", status, tostring(progress or "?"), eliteName)
+            EliteParagraph:Set({Text = text})
+        end)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(5) do
+        pcall(function()
+            local character = LocalPlayer.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            if not root then return end
+            local count = 0
+            local details = {}
+            for _, item in ipairs(workspace:GetChildren()) do
+                if string.find(item.Name, "Fruit") and item:IsA("Model") then
+                    local primary = item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")
+                    if primary then
+                        count = count + 1
+                        local distance = (primary.Position - root.Position).Magnitude
+                        if #details < 3 then
+                            table.insert(details, string.format("%s - %s studs", item.Name, formatNumber(math.floor(distance))))
+                        end
+                    end
+                end
+            end
+            local text = "Fruits in server: " .. tostring(count)
+            if #details > 0 then
+                text = text .. "\n" .. table.concat(details, "\n")
+            end
+            FruitParagraph:Set({Text = text})
+        end)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(5) do
+        pcall(function()
+            local origin = workspace:FindFirstChild("_WorldOrigin")
+            local locations = origin and origin:FindFirstChild("Locations")
+            local text = "Mirage Island: Not detected"
+            if locations and locations:FindFirstChild("Mirage Island") then
+                text = "Mirage Island: Spawned!"
+            end
+            MirageParagraph:Set({Text = text})
+        end)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(10) do
+        pcall(function()
+            local ownedIndex = 0
+            for idx, belt in ipairs(DojoBeltSteps) do
+                if HasAccessory(belt.name) then
+                    ownedIndex = idx
+                else
+                    break
+                end
+            end
+            local nextBelt = DojoBeltSteps[ownedIndex + 1]
+            local text
+            if nextBelt then
+                text = string.format("Next Belt: %s\nGuide: %s", nextBelt.name, nextBelt.tip)
+            else
+                text = "All Dojo belts collected. Enjoy the Black Belt!"
+            end
+            DojoParagraph:Set({Text = text})
+        end)
+    end
+end)
+
+local MainTab = Window:CreateTab({Name = "Main", Icon = GetIcon("Main"), ShowTitle = true})
 
 MainTab:CreateSection("Farming")
 MainTab:CreateToggle({Name = "Auto Farm Level", CurrentValue = _G.Settings.Main["Auto Farm Level"], Callback = function(v) _G.Settings.Main["Auto Farm Level"] = v end}, "AutoFarmLevel")
+MainTab:CreateToggle({Name = "Fast Auto Farm Level", CurrentValue = _G.Settings.Main["Fast Auto Farm Level"], Callback = function(v) _G.Settings.Main["Fast Auto Farm Level"] = v end}, "FastAutoFarmLevel")
 MainTab:CreateToggle({Name = "Auto Farm Bone", CurrentValue = _G.Settings.Main["Auto Farm Bone"], Callback = function(v) _G.Settings.Main["Auto Farm Bone"] = v end}, "AutoFarmBone")
 MainTab:CreateToggle({Name = "Auto Elite Hunter", CurrentValue = _G.Settings.Main["Auto Elite Hunter"], Callback = function(v) _G.Settings.Main["Auto Elite Hunter"] = v end}, "AutoEliteHunter")
-MainTab:CreateToggle({Name = "Auto Farm Chest", CurrentValue = _G.Settings.Main["Auto Farm Chest"], Callback = function(v) _G.Settings.Main["Auto Farm Chest"] = v end}, "AutoFarmChest")
 
 MainTab:CreateSection("Mastery Control")
 MainTab:CreateToggle({Name = "Auto Farm Mastery", CurrentValue = _G.Settings.Main["Auto Farm Mastery"], Callback = function(v) _G.Settings.Main["Auto Farm Mastery"] = v end}, "AutoFarmMastery")
@@ -1284,7 +1814,32 @@ MainTab:CreateDropdown({
     end
 }, "SelectWeapon")
 
-local StatsTab = Window:CreateTab({Name = "Stats", Icon = "bar_chart", ImageSource = "Material", ShowTitle = true})
+MainTab:CreateSection("Looting")
+MainTab:CreateToggle({Name = "Auto Farm Chest", CurrentValue = _G.Settings.Main["Auto Farm Chest"], Callback = function(v)
+    _G.Settings.Main["Auto Farm Chest"] = v
+end}, "AutoFarmChest")
+MainTab:CreateToggle({Name = "Chest Bypass Pulse", CurrentValue = _G.Settings.Main["Chest Bypass"], Callback = function(v)
+    _G.Settings.Main["Chest Bypass"] = v
+end}, "ChestBypass")
+MainTab:CreateToggle({Name = "Hop When Chests Dry", CurrentValue = _G.Settings.Main["Chest Hop When Dry"], Callback = function(v)
+    _G.Settings.Main["Chest Hop When Dry"] = v
+end}, "ChestHop")
+MainTab:CreateSlider({Name = "Chest Hop Delay", Range = {5, 30}, Increment = 1, CurrentValue = _G.Settings.Main["Chest Hop Delay"], Callback = function(v)
+    _G.Settings.Main["Chest Hop Delay"] = v
+end}, "ChestHopDelay")
+MainTab:CreateToggle({Name = "Stop On Chalice/Fist", CurrentValue = _G.Settings.Main["Stop Chest On Rare"], Callback = function(v)
+    _G.Settings.Main["Stop Chest On Rare"] = v
+end}, "StopChestRare")
+
+MainTab:CreateSection("Exploration Utilities")
+MainTab:CreateToggle({Name = "Auto Collect Berry", CurrentValue = _G.Settings.Main["Auto Collect Berry"], Callback = function(v)
+    _G.Settings.Main["Auto Collect Berry"] = v
+end}, "AutoCollectBerry")
+MainTab:CreateToggle({Name = "Auto Collect Berry Hop", CurrentValue = _G.Settings.Main["Auto Collect Berry Hop"], Callback = function(v)
+    _G.Settings.Main["Auto Collect Berry Hop"] = v
+end}, "AutoCollectBerryHop")
+
+local StatsTab = Window:CreateTab({Name = "Stats", Icon = GetIcon("Stats"), ShowTitle = true})
 StatsTab:CreateToggle({Name = "Auto Stats", CurrentValue = _G.Settings.Stats["Enabled Auto Stats"], Callback = function(v) _G.Settings.Stats["Enabled Auto Stats"] = v end}, "AutoStats")
 StatsTab:CreateDropdown({
     Name = "Select Stat",
@@ -1296,7 +1851,7 @@ StatsTab:CreateDropdown({
 }, "SelectStat")
 StatsTab:CreateSlider({Name = "Points per Loop", Range = {1, 100}, Increment = 1, CurrentValue = _G.Settings.Stats["Point Select"], Callback = function(v) _G.Settings.Stats["Point Select"] = v end}, "PointsSelect")
 
-local ShopTab = Window:CreateTab({Name = "Shop", Icon = "shopping_cart", ImageSource = "Material", ShowTitle = true})
+local ShopTab = Window:CreateTab({Name = "Shop", Icon = GetIcon("Shop"), ShowTitle = true})
 ShopTab:CreateSection("Automation")
 ShopTab:CreateToggle({Name = "Auto Random Fruit", CurrentValue = _G.Settings.Shop["Auto Random Fruit"], Callback = function(v) _G.Settings.Shop["Auto Random Fruit"] = v end}, "AutoRandomFruitShop")
 ShopTab:CreateToggle({Name = "Auto Legendary Sword", CurrentValue = _G.Settings.Shop["Auto Legendary Sword"], Callback = function(v) _G.Settings.Shop["Auto Legendary Sword"] = v end}, "AutoLegendarySword")
@@ -1374,7 +1929,47 @@ ShopTab:CreateButton({Name = "Buy Tomoe Ring", Callback = function()
     ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyItem", "Tomoe Ring")
 end})
 
-local MaterialsTab = Window:CreateTab({Name = "Materials", Icon = "widgets", ImageSource = "Material", ShowTitle = true})
+local FruitTab = Window:CreateTab({Name = "Fruits", Icon = GetIcon("Fruit"), ShowTitle = true})
+FruitTab:CreateSection("Sniper")
+FruitTab:CreateDropdown({
+    Name = "Select Fruit",
+    Options = FruitOptions,
+    CurrentOption = {_G.Settings.Fruit["Selected Sniper Fruit"]},
+    Callback = function(v)
+        _G.Settings.Fruit["Selected Sniper Fruit"] = unwrapOption(v)
+    end
+}, "SniperFruit")
+FruitTab:CreateToggle({Name = "Auto Buy From Sniper", CurrentValue = _G.Settings.Fruit["Auto Buy From Sniper"], Callback = function(v)
+    _G.Settings.Fruit["Auto Buy From Sniper"] = v
+end}, "AutoBuyFruit")
+
+FruitTab:CreateSection("Inventory")
+FruitTab:CreateToggle({Name = "Auto Store Fruits", CurrentValue = _G.Settings.Fruit["Auto Store Fruits"], Callback = function(v)
+    _G.Settings.Fruit["Auto Store Fruits"] = v
+end}, "AutoStoreFruit")
+FruitTab:CreateDropdown({
+    Name = "Select Eat Fruit",
+    Options = FruitOptions,
+    CurrentOption = {_G.Settings.Fruit["Selected Eat Fruit"]},
+    Callback = function(v)
+        _G.Settings.Fruit["Selected Eat Fruit"] = unwrapOption(v)
+    end
+}, "EatFruitSelection")
+FruitTab:CreateToggle({Name = "Auto Eat Selected Fruit", CurrentValue = _G.Settings.Fruit["Auto Eat Fruit"], Callback = function(v)
+    _G.Settings.Fruit["Auto Eat Fruit"] = v
+end}, "AutoEatFruit")
+
+FruitTab:CreateSection("World Fruits")
+FruitTab:CreateToggle({Name = "Bring To Nearest Fruit", CurrentValue = _G.Settings.Fruit["Bring To Fruit"], Callback = function(v)
+    _G.Settings.Fruit["Bring To Fruit"] = v
+    if v then _G.Settings.Fruit["Tween To Fruit"] = false end
+end}, "BringFruit")
+FruitTab:CreateToggle({Name = "Tween To Nearest Fruit", CurrentValue = _G.Settings.Fruit["Tween To Fruit"], Callback = function(v)
+    _G.Settings.Fruit["Tween To Fruit"] = v
+    if v then _G.Settings.Fruit["Bring To Fruit"] = false end
+end}, "TweenFruit")
+
+local MaterialsTab = Window:CreateTab({Name = "Materials", Icon = GetIcon("Materials"), ShowTitle = true})
 MaterialsTab:CreateToggle({Name = "Auto Farm Material", CurrentValue = _G.Settings.Materials["Auto Farm Material"], Callback = function(v) _G.Settings.Materials["Auto Farm Material"] = v end}, "AutoFarmMaterial")
 MaterialsTab:CreateDropdown({
     Name = "Select Material",
@@ -1385,10 +1980,10 @@ MaterialsTab:CreateDropdown({
     end
 }, "SelectMaterial")
 
-local BonesTab = Window:CreateTab({Name = "Bones", Icon = "ad_units", ImageSource = "Material", ShowTitle = true})
+local BonesTab = Window:CreateTab({Name = "Bones", Icon = GetIcon("Bones"), ShowTitle = true})
 BonesTab:CreateToggle({Name = "Auto Random Bone", CurrentValue = _G.Settings.Bones["Auto Random Bone"], Callback = function(v) _G.Settings.Bones["Auto Random Bone"] = v end}, "AutoRandomBone")
 
-local RaidTab = Window:CreateTab({Name = "Raid", Icon = "security", ImageSource = "Material", ShowTitle = true})
+local RaidTab = Window:CreateTab({Name = "Raid", Icon = GetIcon("Raid"), ShowTitle = true})
 RaidTab:CreateToggle({Name = "Auto Start Raid", CurrentValue = _G.Settings.Raid["Auto Start Raid"], Callback = function(v) _G.Settings.Raid["Auto Start Raid"] = v end}, "AutoStartRaid")
 RaidTab:CreateToggle({Name = "Auto Buy Chip", CurrentValue = _G.Settings.Raid["Auto Buy Chip"], Callback = function(v) _G.Settings.Raid["Auto Buy Chip"] = v end}, "AutoBuyChip")
 RaidTab:CreateDropdown({
@@ -1401,7 +1996,7 @@ RaidTab:CreateDropdown({
 }, "SelectChip")
 RaidTab:CreateToggle({Name = "Auto Awaken", CurrentValue = _G.Settings.Raid["Auto Awaken"], Callback = function(v) _G.Settings.Raid["Auto Awaken"] = v end}, "AutoAwaken")
 
-local TravelTab = Window:CreateTab({Name = "Travel", Icon = "travel_explore", ImageSource = "Material", ShowTitle = true})
+local TravelTab = Window:CreateTab({Name = "Travel", Icon = GetIcon("Travel"), ShowTitle = true})
 TravelTab:CreateSection("Teleport")
 TravelTab:CreateDropdown({
     Name = "Select Destination",
@@ -1417,7 +2012,7 @@ TravelTab:CreateButton({Name = "Teleport", Callback = function()
     if cframe then toTarget(cframe) end
 end})
 
-local SeaTab = Window:CreateTab({Name = "Sea", Icon = "waves", ImageSource = "Material", ShowTitle = true})
+local SeaTab = Window:CreateTab({Name = "Sea", Icon = GetIcon("Sea"), ShowTitle = true})
 SeaTab:CreateSection("World Travel")
 SeaTab:CreateButton({Name = "Travel to Sea 1", Callback = function()
     ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelMain")
@@ -1450,7 +2045,7 @@ SeaTab:CreateToggle({Name = "Auto Terror Shark", CurrentValue = _G.Settings.Sea[
 SeaTab:CreateToggle({Name = "Auto Sea Mobs", CurrentValue = _G.Settings.Sea["Auto Sea Mobs"], Callback = function(v) _G.Settings.Sea["Auto Sea Mobs"] = v end}, "AutoSeaMobs")
 SeaTab:CreateToggle({Name = "Auto Pirate Raid", CurrentValue = _G.Settings.Sea["Auto Pirate Raid"], Callback = function(v) _G.Settings.Sea["Auto Pirate Raid"] = v end}, "AutoPirateRaid")
 
-local ESPTab = Window:CreateTab({Name = "ESP", Icon = "visibility", ImageSource = "Material", ShowTitle = true})
+local ESPTab = Window:CreateTab({Name = "ESP", Icon = GetIcon("ESP"), ShowTitle = true})
 ESPTab:CreateSection("Visual Helpers")
 ESPTab:CreateToggle({Name = "Player ESP", CurrentValue = _G.Settings.ESP["Player ESP"], Callback = function(v) _G.Settings.ESP["Player ESP"] = v end}, "PlayerESP")
 ESPTab:CreateToggle({Name = "Chest ESP", CurrentValue = _G.Settings.ESP["Chest ESP"], Callback = function(v) _G.Settings.ESP["Chest ESP"] = v end}, "ChestESP")
@@ -1458,20 +2053,20 @@ ESPTab:CreateToggle({Name = "Fruit ESP", CurrentValue = _G.Settings.ESP["Fruit E
 ESPTab:CreateToggle({Name = "Flower ESP", CurrentValue = _G.Settings.ESP["Flower ESP"], Callback = function(v) _G.Settings.ESP["Flower ESP"] = v end}, "FlowerESP")
 ESPTab:CreateToggle({Name = "Raid ESP", CurrentValue = _G.Settings.ESP["Raid ESP"], Callback = function(v) _G.Settings.ESP["Raid ESP"] = v end}, "RaidESP")
 
-local MiscTab = Window:CreateTab({Name = "Misc", Icon = "settings", ImageSource = "Material", ShowTitle = true})
-MiscTab:CreateSection("Utilities")
-MiscTab:CreateButton({Name = "Server Hop", Callback = function() ServerHop() end})
-MiscTab:CreateButton({Name = "Stop Tween (Emergency)", Callback = function() StopTween() end})
-MiscTab:CreateSection("Display & Teams")
-MiscTab:CreateToggle({Name = "White Screen", CurrentValue = _G.Settings.Configs["White Screen"], Callback = function(v)
+local SettingsTab = Window:CreateTab({Name = "Settings", Icon = GetIcon("Settings"), ShowTitle = true})
+SettingsTab:CreateSection("Utilities")
+SettingsTab:CreateButton({Name = "Server Hop", Callback = function() ServerHop() end})
+SettingsTab:CreateButton({Name = "Stop Tween (Emergency)", Callback = function() StopTween() end})
+SettingsTab:CreateSection("Display & Teams")
+SettingsTab:CreateToggle({Name = "White Screen", CurrentValue = _G.Settings.Configs["White Screen"], Callback = function(v)
     _G.Settings.Configs["White Screen"] = v
     game:GetService("RunService"):Set3dRenderingEnabled(not v)
 end}, "WhiteScreen")
-MiscTab:CreateToggle({Name = "Auto Select Team", CurrentValue = _G.Settings.Teams["Auto Select Team"], Callback = function(v)
+SettingsTab:CreateToggle({Name = "Auto Select Team", CurrentValue = _G.Settings.Teams["Auto Select Team"], Callback = function(v)
     _G.Settings.Teams["Auto Select Team"] = v
     if v then AutoChooseTeam() end
 end}, "AutoSelectTeam")
-MiscTab:CreateDropdown({
+SettingsTab:CreateDropdown({
     Name = "Preferred Team",
     Options = {"Pirates", "Marines"},
     CurrentOption = {_G.Settings.Teams["Preferred Team"]},
@@ -1481,7 +2076,7 @@ MiscTab:CreateDropdown({
     end
 }, "PreferredTeam")
 
-MiscTab:BuildThemeSection()
-MiscTab:BuildConfigSection()
+SettingsTab:BuildThemeSection()
+SettingsTab:BuildConfigSection()
 
 Luna:LoadAutoloadConfig()
