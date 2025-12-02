@@ -108,6 +108,16 @@ _G.Settings = {
     },
     Teleport = {
         ["Select Island"] = "",
+    },
+    AntiCheat = {
+        ["Bypass"] = false,
+        ["Auto Hop Timer"] = 30, -- Minutes
+    },
+    Webhook = {
+        ["Enabled"] = false,
+        ["Url"] = "",
+        ["Level Up"] = true,
+        ["Rare Item"] = true,
     }
 }
 
@@ -249,6 +259,46 @@ local function BypassAntiCheat()
     end)
 end
 task.spawn(BypassAntiCheat)
+
+-- Webhook & Auto Hop Logic
+local function SendWebhook(title, description, color)
+    if not _G.Settings.Webhook["Enabled"] or _G.Settings.Webhook["Url"] == "" then return end
+    
+    local data = {
+        ["embeds"] = {{
+            ["title"] = title,
+            ["description"] = description,
+            ["color"] = color or 65280,
+            ["footer"] = {
+                ["text"] = "Aero Hub - " .. os.date("%X")
+            }
+        }}
+    }
+    
+    local jsonData = HttpService:JSONEncode(data)
+    request({
+        Url = _G.Settings.Webhook["Url"],
+        Method = "POST",
+        Headers = {["Content-Type"] = "application/json"},
+        Body = jsonData
+    })
+end
+
+local lastHopCheck = os.clock()
+task.spawn(function()
+    while task.wait(60) do
+        if _G.Settings.AntiCheat["Bypass"] then
+            local elapsedMinutes = (os.clock() - lastHopCheck) / 60
+            if elapsedMinutes >= _G.Settings.AntiCheat["Auto Hop Timer"] then
+                SendWebhook("Anti-Cheat Bypass", "Auto hopping to a new server...", 16776960)
+                TeleportToServer(true)
+                lastHopCheck = os.clock()
+            end
+        else
+            lastHopCheck = os.clock()
+        end
+    end
+end)
 
 -- Helper Functions
 local function EquipWeapon(toolName)
@@ -575,17 +625,42 @@ local function toTarget(targetPos)
         Character.Humanoid.PlatformStand = true
     end
     
+    -- Add BodyVelocity to hold position
+    local bv = RootPart:FindFirstChild("HoldVelocity") or Instance.new("BodyVelocity")
+    bv.Name = "HoldVelocity"
+    bv.Parent = RootPart
+    bv.MaxForce = Vector3.new(100000, 100000, 100000)
+    bv.Velocity = Vector3.zero
+    
     local Tween = TweenService:Create(RootPart, TweenInfo, {CFrame = targetCFrame})
     activeTween = Tween
+    
+    local startTime = os.clock()
     
     Tween.Completed:Connect(function()
         if activeTween == Tween then
             activeTween = nil
             DisableNoclip()
+            -- Keep BodyVelocity for a moment to stabilize
+            task.delay(0.1, function()
+                if not activeTween and bv and bv.Parent then bv:Destroy() end
+            end)
         end
     end)
     
     Tween:Play()
+    
+    -- Stuck/Timeout Check
+    task.spawn(function()
+        while activeTween == Tween do
+            if os.clock() - startTime > (Distance / Speed) + 2 then
+                if activeTween then activeTween:Cancel() end
+                break
+            end
+            task.wait(0.5)
+        end
+    end)
+    
     return Tween
 end
 
@@ -605,6 +680,12 @@ local function ApproachEnemy(enemy, hoverHeight)
         if LocalPlayer.Character:FindFirstChild("Humanoid") then
             LocalPlayer.Character.Humanoid.PlatformStand = true
         end
+        -- Ensure HoldVelocity exists
+        local bv = myRoot:FindFirstChild("HoldVelocity") or Instance.new("BodyVelocity")
+        bv.Name = "HoldVelocity"
+        bv.Parent = myRoot
+        bv.MaxForce = Vector3.new(100000, 100000, 100000)
+        bv.Velocity = Vector3.zero
     else
         toTarget(targetCFrame)
     end
@@ -1128,6 +1209,9 @@ end
 local function BringMob(target)
     if not target or not target:FindFirstChild("HumanoidRootPart") then return end
     if not workspace:FindFirstChild("Enemies") then return end
+    
+    pcall(function() sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge) end)
+    
     for _, enemy in ipairs(workspace.Enemies:GetChildren()) do
         if enemy ~= target and enemy.Name == target.Name and enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
             local distance = (enemy.HumanoidRootPart.Position - target.HumanoidRootPart.Position).Magnitude
@@ -1136,6 +1220,7 @@ local function BringMob(target)
                 enemy.HumanoidRootPart.CanCollide = false
                 enemy.HumanoidRootPart.Size = Vector3.new(60, 60, 60)
                 enemy.Humanoid.WalkSpeed = 0
+                enemy.Humanoid.JumpPower = 0
                 enemy.Humanoid.PlatformStand = true
                 if enemy:FindFirstChild("Head") then enemy.Head.CanCollide = false end
             end
@@ -1147,8 +1232,11 @@ end
 task.spawn(function()
     while task.wait() do
         if _G.Settings.Main["Auto Farm Level"] and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            pcall(function()
-                local level = LocalPlayer.Data.Level.Value
+            if _G.Settings.Main["Auto Farm Chest"] then
+                -- Pause Auto Farm Level if Chest Farm is active to prevent conflict
+            else
+                pcall(function()
+                    local level = LocalPlayer.Data.Level.Value
                 local questData = GetQuestData(level)
                 if not questData then return end
                 
@@ -1197,6 +1285,7 @@ task.spawn(function()
                     end
                 end
             end)
+            end
         end
     end
 end)
@@ -2005,7 +2094,7 @@ end}, "AutoFarmChest")
 MainTab:CreateToggle({Name = "Chest Bypass Pulse", CurrentValue = _G.Settings.Main["Chest Bypass"], Callback = function(v)
     _G.Settings.Main["Chest Bypass"] = v
 end}, "ChestBypass")
-MainTab:CreateToggle({Name = "Hop When Chests Dry", CurrentValue = _G.Settings.Main["Chest Hop When Dry"], Callback = function(v)
+MainTab:CreateToggle({Name = "Hop When No more chests", CurrentValue = _G.Settings.Main["Chest Hop When Dry"], Callback = function(v)
     _G.Settings.Main["Chest Hop When Dry"] = v
 end}, "ChestHop")
 MainTab:CreateSlider({Name = "Chest Hop Delay", Range = {5, 30}, Increment = 1, CurrentValue = _G.Settings.Main["Chest Hop Delay"], Callback = function(v)
@@ -2015,13 +2104,6 @@ MainTab:CreateToggle({Name = "Stop On Chalice/Fist", CurrentValue = _G.Settings.
     _G.Settings.Main["Stop Chest On Rare"] = v
 end}, "StopChestRare")
 
-MainTab:CreateSection("Exploration Utilities")
-MainTab:CreateToggle({Name = "Auto Collect Berry", CurrentValue = _G.Settings.Main["Auto Collect Berry"], Callback = function(v)
-    _G.Settings.Main["Auto Collect Berry"] = v
-end}, "AutoCollectBerry")
-MainTab:CreateToggle({Name = "Auto Collect Berry Hop", CurrentValue = _G.Settings.Main["Auto Collect Berry Hop"], Callback = function(v)
-    _G.Settings.Main["Auto Collect Berry Hop"] = v
-end}, "AutoCollectBerryHop")
 
 local StatsTab = Window:CreateTab({Name = "Stats", Icon = GetIcon("Stats"), ImageSource = "Custom", ShowTitle = true})
 StatsTab:CreateToggle({Name = "Auto Stats", CurrentValue = _G.Settings.Stats["Enabled Auto Stats"], Callback = function(v) _G.Settings.Stats["Enabled Auto Stats"] = v end}, "AutoStats")
@@ -2260,7 +2342,62 @@ SettingsTab:CreateDropdown({
     end
 }, "PreferredTeam")
 
+SettingsTab:CreateSection("Anti-Cheat")
+SettingsTab:CreateToggle({Name = "Auto Hop (Anti-Cheat)", CurrentValue = _G.Settings.AntiCheat["Auto Hop"], Callback = function(v)
+    _G.Settings.AntiCheat["Auto Hop"] = v
+end}, "AutoHopAntiCheat")
+SettingsTab:CreateSlider({Name = "Hop Timer (Minutes)", Range = {10, 120}, Increment = 1, CurrentValue = _G.Settings.AntiCheat["Hop Timer"], Callback = function(v)
+    _G.Settings.AntiCheat["Hop Timer"] = v
+end}, "HopTimer")
+
+SettingsTab:CreateSection("Webhook")
+SettingsTab:CreateInput({Name = "Webhook URL", Placeholder = "https://discord.com/api/webhooks/...", CurrentValue = _G.Settings.Webhook["Url"], Callback = function(v)
+    _G.Settings.Webhook["Url"] = v
+end}, "WebhookUrl")
+SettingsTab:CreateToggle({Name = "Enable Webhook", CurrentValue = _G.Settings.Webhook["Enabled"], Callback = function(v)
+    _G.Settings.Webhook["Enabled"] = v
+    if v then SendWebhook("Webhook Enabled", "Webhook notifications have been enabled.") end
+end}, "EnableWebhook")
+SettingsTab:CreateToggle({Name = "Notify on Level Up", CurrentValue = _G.Settings.Webhook["OnLevelUp"], Callback = function(v)
+    _G.Settings.Webhook["OnLevelUp"] = v
+end}, "WebhookLevelUp")
+SettingsTab:CreateToggle({Name = "Notify on Rare Item", CurrentValue = _G.Settings.Webhook["OnRareItem"], Callback = function(v)
+    _G.Settings.Webhook["OnRareItem"] = v
+end}, "WebhookRareItem")
+
 SettingsTab:BuildThemeSection()
 SettingsTab:BuildConfigSection()
 
 Luna:LoadAutoloadConfig()
+
+-- Webhook Listeners
+task.spawn(function()
+    if not LocalPlayer:FindFirstChild("Data") or not LocalPlayer.Data:FindFirstChild("Level") then return end
+    local lastLevel = LocalPlayer.Data.Level.Value
+    LocalPlayer.Data.Level.Changed:Connect(function(newLevel)
+        if newLevel > lastLevel then
+            lastLevel = newLevel
+            if _G.Settings.Webhook["OnLevelUp"] then
+                SendWebhook("Level Up!", "You have reached level " .. newLevel .. "!", 65280)
+            end
+        end
+    end)
+end)
+
+task.spawn(function()
+    local function onItemAdded(child)
+        if _G.Settings.Webhook["OnRareItem"] then
+             if child:IsA("Tool") and (string.find(child.Name, "Fruit") or string.find(child.Name, "Key") or string.find(child.Name, "Chalice")) then
+                SendWebhook("Rare Item Obtained", "You found: " .. child.Name, 16776960)
+             end
+        end
+    end
+    
+    LocalPlayer.Backpack.ChildAdded:Connect(onItemAdded)
+    if LocalPlayer.Character then
+        LocalPlayer.Character.ChildAdded:Connect(onItemAdded)
+    end
+    LocalPlayer.CharacterAdded:Connect(function(char)
+        char.ChildAdded:Connect(onItemAdded)
+    end)
+end)
