@@ -137,6 +137,58 @@ local World2 = PlaceId == 4442272183
 local World3 = PlaceId == 7449423635
 local CurrentWorld = (World1 and 1) or (World2 and 2) or (World3 and 3) or 1
 
+-- Initialize EnemySpawns (Redz Logic - Continuous Update)
+task.spawn(function()
+    while task.wait(5) do
+        if not workspace:FindFirstChild("EnemySpawns") then
+            Instance.new("Folder", workspace).Name = "EnemySpawns"
+        end
+        local enemySpawnsFolder = workspace.EnemySpawns
+
+        local function registerSpawn(obj)
+            if not obj then return end
+            local name = obj.Name
+            -- Redz cleaning logic: Remove "Lv. ", brackets, digits, and spaces
+            local cleanName = name:gsub("Lv%.", ""):gsub("[%[%]]", ""):gsub("%d+", ""):gsub("%s+", "")
+            
+            if not enemySpawnsFolder:FindFirstChild(cleanName) then
+                local clone = nil
+                if obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") then
+                    clone = obj.HumanoidRootPart:Clone()
+                elseif obj:IsA("BasePart") then
+                    clone = obj:Clone()
+                end
+                
+                if clone then
+                    clone.Name = cleanName
+                    clone.Parent = enemySpawnsFolder
+                    clone.Anchored = true
+                    clone.Transparency = 1
+                end
+            end
+        end
+
+        -- From WorldOrigin
+        if workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("EnemySpawns") then
+            for _, spawnPoint in pairs(workspace._WorldOrigin.EnemySpawns:GetChildren()) do
+                registerSpawn(spawnPoint)
+            end
+        end
+
+        -- From Workspace Enemies
+        if workspace:FindFirstChild("Enemies") then
+            for _, enemy in pairs(workspace.Enemies:GetChildren()) do
+                registerSpawn(enemy)
+            end
+        end
+
+        -- From ReplicatedStorage (Models)
+        for _, item in pairs(ReplicatedStorage:GetChildren()) do
+            registerSpawn(item)
+        end
+    end
+end)
+
 local function CheckSea(reqWorld)
     if reqWorld == 1 and World1 then return true end
     if reqWorld == 2 and World2 then return true end
@@ -856,23 +908,115 @@ local QuestDatabase = {
 }
 
 local function GetQuestData(level)
-    local bestQuest = nil
-    for _, questData in ipairs(QuestDatabase) do
-        if level >= questData.Level then 
-            -- Determine Quest World based on Level
-            local questWorld = 1
-            if questData.Level >= 700 and questData.Level < 1500 then questWorld = 2 end
-            if questData.Level >= 1500 then questWorld = 3 end
-            
-            -- Only select quest if we are in the correct world
-            if CheckSea(questWorld) then
-                bestQuest = questData 
-            end
-        else 
-            break 
+    local GuideModule = require(ReplicatedStorage.GuideModule)
+    local Quests = require(ReplicatedStorage.Quests)
+    
+    local npcPosition = nil
+    local questLevel = 0
+    local levelRequire = 0
+    local questName = ""
+    local mobName = ""
+    local mobNameClean = ""
+
+    -- Special handling for low levels (Redz logic)
+    if level >= 1 and level <= 9 then
+        if tostring(LocalPlayer.Team) == "Pirates" then
+            return {Level = 1, Quest = "BanditQuest1", QuestNum = 1, NPCPos = CFrame.new(1059.99, 16.92, 1549.28), Mob = "Bandit", NPCName = "Quest Giver"}
+        else
+            return {Level = 1, Quest = "MarineQuest", QuestNum = 1, NPCPos = CFrame.new(-2709.67, 24.52, 2104.24), Mob = "Trainee", NPCName = "Marine Quest Giver"}
         end
     end
-    return bestQuest
+
+    -- Special handling for Prisoner (Redz logic)
+    if level >= 210 and level <= 249 then
+        return {Level = 210, Quest = "PrisonerQuest", QuestNum = 2, NPCPos = CFrame.new(5308.93, 1.65, 475.12), Mob = "Dangerous Prisoner", NPCName = "Quest Giver"}
+    end
+
+    -- Iterate GuideModule to find the best quest
+    for _, npcData in pairs(GuideModule.Data.NPCList) do
+        for index, lvl in pairs(npcData.Levels) do
+            if level >= lvl then
+                if not levelRequire or levelRequire < lvl then
+                    npcPosition = npcData.CFrame
+                    questLevel = index -- This is the QuestNum
+                    levelRequire = lvl
+                end
+                -- Redz logic for 3 levels
+                if #npcData.Levels == 3 and questLevel == 3 then
+                    npcPosition = npcData.CFrame
+                    questLevel = 2
+                    levelRequire = npcData.Levels[2]
+                end
+            end
+        end
+    end
+
+    -- Handle Entrance Requests (Sky 3, Underwater)
+    if level >= 375 and level <= 399 and (npcPosition.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude > 3000 then
+        ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", Vector3.new(61163.85, 11.67, 1819.78))
+    end
+    if level >= 400 and level <= 449 and (npcPosition.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude > 3000 then
+        ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", Vector3.new(61163.85, 11.67, 1819.78))
+    end
+
+    -- Find Quest Name and Mob Name from Quests module
+    for questId, questData in pairs(Quests) do
+        for _, taskData in pairs(questData) do
+            if taskData.LevelReq == levelRequire then
+                -- Exclude CitizenQuest as per Redz
+                if questId ~= "CitizenQuest" then
+                    questName = questId
+                    for _, taskName in pairs(taskData.Task) do
+                        mobName = taskName
+                        mobNameClean = string.split(taskName, " [Lv. " .. taskData.LevelReq .. "]")[1]
+                    end
+                end
+            end
+        end
+    end
+
+    -- Special Overrides (Redz logic)
+    if questName ~= "MarineQuest2" and questName ~= "ImpelQuest" and questName ~= "SkyExp1Quest" then
+        if questName == "Area2Quest" and questLevel == 2 then
+            questName = "Area2Quest"
+            questLevel = 1
+            mobNameClean = "Swan Pirate"
+            levelRequire = 775
+        end
+    elseif questLevel ~= 1 then
+        if questLevel == 2 then
+            npcPosition = CFrame.new(-7859.09, 5544.19, -381.47)
+        end
+    else
+        npcPosition = CFrame.new(-4721.88, 843.87, -1949.96)
+    end
+    
+    if questName == "ImpelQuest" then
+        questName = "PrisonerQuest"
+        questLevel = 2
+        mobNameClean = "Dangerous Prisoner"
+        levelRequire = 210
+        npcPosition = CFrame.new(5310.60, 0.35, 474.94)
+    end
+
+    if questName == "MarineQuest2" then
+        questName = "MarineQuest2"
+        questLevel = 1
+        mobNameClean = "Chief Petty Officer"
+        levelRequire = 120
+    end
+
+    if questName ~= "" then
+        return {
+            Level = levelRequire,
+            Quest = questName,
+            QuestNum = questLevel,
+            NPCPos = npcPosition,
+            Mob = mobNameClean,
+            NPCName = "Quest Giver"
+        }
+    end
+    return nil
 end
 
 local TravelLookup = {}
@@ -1218,41 +1362,60 @@ local function BringMob(target)
     
     pcall(function() sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge) end)
     
+    local count = 0
     for _, enemy in ipairs(workspace.Enemies:GetChildren()) do
+        if count >= 5 then break end -- Limit to 5 mobs to prevent lag/crash
         if enemy ~= target and enemy.Name == target.Name and enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
             local distance = (enemy.HumanoidRootPart.Position - target.HumanoidRootPart.Position).Magnitude
-            if distance < 350 then 
+            if distance < 300 then -- Reduced radius slightly
                 enemy.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame
                 enemy.HumanoidRootPart.CanCollide = false
-                enemy.HumanoidRootPart.Size = Vector3.new(2, 2, 2) -- Small size to prevent physics glitching
+                enemy.HumanoidRootPart.Size = Vector3.new(2, 2, 2)
                 enemy.Humanoid.WalkSpeed = 0
                 enemy.Humanoid.JumpPower = 0
                 enemy.Humanoid.PlatformStand = true
                 if enemy.Humanoid:FindFirstChild("Animator") then
                     enemy.Humanoid.Animator:Destroy()
                 end
-                enemy.Humanoid:ChangeState(11) -- StrafingNoPhysics
+                enemy.Humanoid:ChangeState(11)
                 if enemy:FindFirstChild("Head") then enemy.Head.CanCollide = false end
+                count = count + 1
             end
         end
     end
 end
 
 local function GetMobSpawnPosition(mobName)
-    if not workspace:FindFirstChild("EnemySpawns") then return nil end
-    local bestMatch, minLen = nil, math.huge
-    
-    -- Clean up mob name for matching (remove Lv. and numbers)
-    local cleanName = mobName:gsub("Lv%.", ""):gsub("[%[%]]", ""):gsub("%d+", ""):gsub("%s+$", ""):gsub("^%s+", "")
-    
-    for _, spawnPoint in ipairs(workspace.EnemySpawns:GetChildren()) do
-        if spawnPoint:IsA("BasePart") then
-            -- Check for exact or partial match
-            if spawnPoint.Name == mobName or spawnPoint.Name == cleanName or string.find(spawnPoint.Name, cleanName) or string.find(mobName, spawnPoint.Name) then
-                return spawnPoint.CFrame
+    -- Helper to clean name
+    local function clean(str)
+        return str:gsub("Lv%.", ""):gsub("[%[%]]", ""):gsub("%d+", ""):gsub("%s+", "")
+    end
+
+    local targetClean = clean(mobName)
+
+    -- 1. Check our generated EnemySpawns folder
+    if workspace:FindFirstChild("EnemySpawns") then
+        for _, spawnPoint in ipairs(workspace.EnemySpawns:GetChildren()) do
+            if spawnPoint:IsA("BasePart") then
+                if spawnPoint.Name == targetClean or spawnPoint.Name == mobName or string.find(spawnPoint.Name, targetClean) then
+                    return spawnPoint.CFrame
+                end
             end
         end
     end
+
+    -- 2. Fallback: Check _WorldOrigin directly
+    if workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("EnemySpawns") then
+        for _, spawnPoint in pairs(workspace._WorldOrigin.EnemySpawns:GetChildren()) do
+            if spawnPoint:IsA("BasePart") then
+                local name = clean(spawnPoint.Name)
+                if name == targetClean or string.find(name, targetClean) then
+                    return spawnPoint.CFrame
+                end
+            end
+        end
+    end
+
     return nil
 end
 
@@ -1330,7 +1493,7 @@ task.spawn(function()
                                 EnsureHaki()
                                 ReleaseSit()
                                 PerformBasicAttack()
-                                if _G.Settings.Configs["Fast Attack"] then
+                                if _G.Settings.Configs["Fast Attack"] and FastAttack and FastAttack.AttackNearest then
                                     FastAttack:AttackNearest()
                                 end
                             end
@@ -1340,6 +1503,7 @@ task.spawn(function()
                             if spawnPos then
                                 toTarget(spawnPos * CFrame.new(0, 50, 0))
                             else
+                                warn("Aero Hub: Could not find spawn for " .. tostring(questData.Mob))
                                 -- Fallback: Hover at Quest Giver (only if spawn not found)
                                 toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
                             end
@@ -2191,9 +2355,28 @@ SettingsTab:CreateSection("Utilities")
 SettingsTab:CreateButton({Name = "Server Hop", Callback = function() ServerHop() end})
 SettingsTab:CreateButton({Name = "Stop Tween (Emergency)", Callback = function() StopTween() end})
 SettingsTab:CreateSection("Display & Teams")
-SettingsTab:CreateToggle({Name = "White Screen", CurrentValue = _G.Settings.Configs["White Screen"], Callback = function(v)
+SettingsTab:CreateToggle({Name = "FPS Boost (White Screen)", CurrentValue = _G.Settings.Configs["White Screen"], Callback = function(v)
     _G.Settings.Configs["White Screen"] = v
     game:GetService("RunService"):Set3dRenderingEnabled(not v)
+    
+    if v then
+        -- Aggressive FPS Boost
+        pcall(function()
+            local decals = workspace:GetDescendants()
+            for _, obj in ipairs(decals) do
+                if obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("ParticleEmitter") then
+                    obj.Transparency = 1
+                end
+            end
+            settings().Rendering.QualityLevel = 1
+            workspace.Terrain.WaterWaveSize = 0
+            workspace.Terrain.WaterWaveSpeed = 0
+            workspace.Terrain.WaterReflectance = 0
+            workspace.Terrain.WaterTransparency = 0
+            game.Lighting.GlobalShadows = false
+            game.Lighting.FogEnd = 9e9
+        end)
+    end
 end}, "WhiteScreen")
 SettingsTab:CreateToggle({Name = "Auto Select Team", CurrentValue = _G.Settings.Teams["Auto Select Team"], Callback = function(v)
     _G.Settings.Teams["Auto Select Team"] = v
