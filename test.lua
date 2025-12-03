@@ -659,6 +659,8 @@ local function DisableNoclip()
     end
 end
 
+local lastTweenTarget = nil
+
 local function toTarget(targetPos)
     if not targetPos then return end
     local targetCFrame
@@ -673,15 +675,21 @@ local function toTarget(targetPos)
     
     local RootPart = Character.HumanoidRootPart
     
-    -- Smart Teleport Logic
+    -- Smart Teleport Logic (Islands)
     local nearestTeleport = CheckNearestTeleporter(targetCFrame.Position)
     if nearestTeleport then
         RequestEntrance(nearestTeleport)
         task.wait(0.5)
-        return -- Recalculate path after teleport
+        return 
     end
 
     local Distance = (targetCFrame.Position - RootPart.Position).Magnitude
+    
+    -- Optimization: Don't restart tween if target hasn't changed much
+    if activeTween and activeTween.PlaybackState == Enum.PlaybackState.Playing and lastTweenTarget and (lastTweenTarget - targetCFrame.Position).Magnitude < 10 then
+        return
+    end
+
     local Speed = 350
     if Distance < 250 then Speed = 600 end
     if Distance > 1000 then Speed = 350 end 
@@ -715,6 +723,7 @@ local function toTarget(targetPos)
         Character.Humanoid.PlatformStand = true
     end
     
+    lastTweenTarget = targetCFrame.Position
     local Tween = TweenService:Create(PartTele, TweenInfo, {CFrame = targetCFrame})
     activeTween = Tween
     
@@ -722,6 +731,7 @@ local function toTarget(targetPos)
         if status == Enum.PlaybackState.Completed then
             if activeTween == Tween then
                 activeTween = nil
+                lastTweenTarget = nil
                 DisableNoclip()
                 if Character:FindFirstChild("PartTele") then
                     Character.PartTele:Destroy()
