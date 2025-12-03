@@ -393,6 +393,12 @@ local function EquipWeaponByType(weaponType)
         EquipWeapon(weaponName)
         if Character:FindFirstChild(weaponName) then return true end
     end
+    
+    -- Fallback: Check if ANY tool is already equipped
+    if Character:FindFirstChildOfClass("Tool") then
+        return true
+    end
+
     local Backpack = LocalPlayer.Backpack
     if Backpack then
         local fallback = Backpack:FindFirstChildOfClass("Tool")
@@ -548,20 +554,28 @@ local DojoBeltSteps = {
 local FastAttack
 local lastBasicAttack = 0
 local function PerformBasicAttack()
-    local fastAttack = _G.Settings.Configs and _G.Settings.Configs["Fast Attack"]
-    if fastAttack then
-        pcall(function()
-            FastAttack:AttackNearest()
-        end)
-        return
+    local character = LocalPlayer.Character
+    if not character then return end
+
+    -- 1. Fast Attack (Redz Logic - Remote Spam)
+    if _G.Settings.Configs and _G.Settings.Configs["Fast Attack"] and FastAttack then
+        pcall(function() FastAttack:AttackNearest() end)
+        -- If Fast Attack is on, we don't need to do anything else usually.
+        -- But we can do a silent tool activation just in case.
     end
 
-    local cooldown = 0.09
-    if os.clock() - lastBasicAttack < cooldown then return end
-    lastBasicAttack = os.clock()
-    pcall(function()
-        FastAttack:AttackNearest()
-    end)
+    -- 2. Standard Tool Activation (No VirtualInputManager)
+    -- This allows you to click other things while farming
+    local tool = character:FindFirstChildOfClass("Tool")
+    if tool then
+        tool:Activate()
+        -- Try known remote names directly (Silent Aim style)
+        if tool:FindFirstChild("Click") and tool.Click:IsA("RemoteEvent") then
+            tool.Click:FireServer()
+        elseif tool:FindFirstChild("LeftClickRemote") and tool.LeftClickRemote:IsA("RemoteFunction") then
+             pcall(function() tool.LeftClickRemote:InvokeServer() end)
+        end
+    end
 end
 
 local function CheckNearestTeleporter(targetPos)
