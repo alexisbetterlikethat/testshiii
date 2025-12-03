@@ -560,20 +560,19 @@ local function PerformBasicAttack()
     -- 1. Fast Attack (Redz Logic - Remote Spam)
     if _G.Settings.Configs and _G.Settings.Configs["Fast Attack"] and FastAttack then
         pcall(function() FastAttack:AttackNearest() end)
-        -- If Fast Attack is on, we don't need to do anything else usually.
-        -- But we can do a silent tool activation just in case.
     end
 
-    -- 2. Standard Tool Activation (No VirtualInputManager)
-    -- This allows you to click other things while farming
+    -- 2. Standard Tool Activation (Silent)
     local tool = character:FindFirstChildOfClass("Tool")
     if tool then
         tool:Activate()
-        -- Try known remote names directly (Silent Aim style)
-        if tool:FindFirstChild("Click") and tool.Click:IsA("RemoteEvent") then
-            tool.Click:FireServer()
-        elseif tool:FindFirstChild("LeftClickRemote") and tool.LeftClickRemote:IsA("RemoteFunction") then
-             pcall(function() tool.LeftClickRemote:InvokeServer() end)
+        -- Aggressive Remote Search
+        for _, v in ipairs(tool:GetDescendants()) do
+            if v:IsA("RemoteEvent") and (v.Name == "Click" or v.Name == "Attack" or v.Name == "LeftClickRemote") then
+                v:FireServer()
+            elseif v:IsA("RemoteFunction") and (v.Name == "Click" or v.Name == "Attack" or v.Name == "LeftClickRemote") then
+                task.spawn(function() v:InvokeServer() end)
+            end
         end
     end
 end
@@ -770,31 +769,49 @@ end
 
 -- Fast Attack
 FastAttack = {Distance = 100}
-local RegisterAttack = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RE/RegisterAttack")
-local RegisterHit = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net"):WaitForChild("RE/RegisterHit")
+local RegisterAttack
+local RegisterHit
+
+task.spawn(function()
+    pcall(function()
+        local Net = ReplicatedStorage:WaitForChild("Modules", 10):WaitForChild("Net", 10)
+        if Net then
+            RegisterAttack = Net:WaitForChild("RE/RegisterAttack", 10)
+            RegisterHit = Net:WaitForChild("RE/RegisterHit", 10)
+        end
+    end)
+end)
 
 function FastAttack:AttackNearest()
+    if not RegisterAttack or not RegisterHit then return end
+    
     local OthersEnemies = {}
     local BasePart = nil
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
     if workspace:FindFirstChild("Enemies") then
         for _, Enemy in pairs(workspace.Enemies:GetChildren()) do
-            if Enemy:FindFirstChild("Head") and Enemy:FindFirstChild("Humanoid") and Enemy.Humanoid.Health > 0 then
-                if (Enemy.Head.Position - LocalPlayer.Character.Head.Position).Magnitude < self.Distance then
-                    table.insert(OthersEnemies, {Enemy, Enemy.Head})
-                    BasePart = Enemy.Head
+            if Enemy:FindFirstChild("Humanoid") and Enemy.Humanoid.Health > 0 then
+                local enemyRoot = Enemy:FindFirstChild("HumanoidRootPart") or Enemy:FindFirstChild("Head")
+                if enemyRoot and (enemyRoot.Position - myRoot.Position).Magnitude < self.Distance then
+                    table.insert(OthersEnemies, {Enemy, enemyRoot})
+                    BasePart = enemyRoot
                 end
             end
         end
     end
     if #OthersEnemies > 0 and BasePart then
-        RegisterAttack:FireServer(0)
-        RegisterHit:FireServer(BasePart, OthersEnemies)
+        pcall(function()
+            RegisterAttack:FireServer(0)
+            RegisterHit:FireServer(BasePart, OthersEnemies)
+        end)
     end
 end
 
 task.spawn(function()
     while task.wait() do
-        if _G.Settings.Configs["Fast Attack"] and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") then
+        if _G.Settings.Configs["Fast Attack"] and LocalPlayer.Character then
             FastAttack:AttackNearest()
         end
     end
