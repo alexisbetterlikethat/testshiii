@@ -660,6 +660,7 @@ local function DisableNoclip()
 end
 
 local lastTweenTarget = nil
+local tweenConnection = nil
 
 local function toTarget(targetPos)
     if not targetPos then return end
@@ -686,42 +687,54 @@ local function toTarget(targetPos)
     local Distance = (targetCFrame.Position - RootPart.Position).Magnitude
     
     -- Optimization: Don't restart tween if target hasn't changed much
-    if activeTween and activeTween.PlaybackState == Enum.PlaybackState.Playing and lastTweenTarget and (lastTweenTarget - targetCFrame.Position).Magnitude < 10 then
+    if activeTween and activeTween.PlaybackState == Enum.PlaybackState.Playing and lastTweenTarget and (lastTweenTarget - targetCFrame.Position).Magnitude < 15 then
         return
     end
 
-    local Speed = 350
-    if Distance < 250 then Speed = 600 end
-    if Distance > 1000 then Speed = 350 end 
+    local Speed = 300
+    if Distance < 250 then Speed = 500 end
+    
+    -- Cleanup previous
+    if activeTween then 
+        activeTween:Cancel() 
+        activeTween = nil 
+    end
+    if tweenConnection then
+        tweenConnection:Disconnect()
+        tweenConnection = nil
+    end
+    if Character:FindFirstChild("PartTele") then
+        Character.PartTele:Destroy()
+    end
 
     -- PartTele Logic (Redz/Matsune Style)
-    if not Character:FindFirstChild("PartTele") then
-        local PartTele = Instance.new("Part", Character)
-        PartTele.Size = Vector3.new(10, 1, 10)
-        PartTele.Name = "PartTele"
-        PartTele.Anchored = true
-        PartTele.Transparency = 1
-        PartTele.CanCollide = false
-        PartTele.CFrame = RootPart.CFrame
-        
-        PartTele:GetPropertyChangedSignal("CFrame"):Connect(function()
-            if Character and Character:FindFirstChild("HumanoidRootPart") then
-                Character.HumanoidRootPart.CFrame = PartTele.CFrame
-                Character.HumanoidRootPart.Velocity = Vector3.zero
-            end
-        end)
-    end
+    local PartTele = Instance.new("Part", Character)
+    PartTele.Size = Vector3.new(1, 1, 1)
+    PartTele.Name = "PartTele"
+    PartTele.Anchored = true
+    PartTele.Transparency = 1
+    PartTele.CanCollide = false
+    PartTele.CFrame = RootPart.CFrame
     
-    local PartTele = Character.PartTele
+    -- Use RunService for smoother/reliable updates
+    tweenConnection = RunService.Stepped:Connect(function()
+        if Character and Character:FindFirstChild("HumanoidRootPart") and PartTele and PartTele.Parent then
+            Character.HumanoidRootPart.CFrame = PartTele.CFrame
+            Character.HumanoidRootPart.Velocity = Vector3.zero
+            
+            -- Anti-Fall / PlatformStand
+            if Character:FindFirstChild("Humanoid") then
+                Character.Humanoid.PlatformStand = true
+            end
+        else
+            if tweenConnection then tweenConnection:Disconnect() end
+        end
+    end)
+    
     local TweenInfo = TweenInfo.new(Distance / Speed, Enum.EasingStyle.Linear)
     
-    if activeTween then activeTween:Cancel() end
-    
-    -- Enable Noclip & PlatformStand
+    -- Enable Noclip
     EnableNoclip()
-    if Character:FindFirstChild("Humanoid") then
-        Character.Humanoid.PlatformStand = true
-    end
     
     lastTweenTarget = targetCFrame.Position
     local Tween = TweenService:Create(PartTele, TweenInfo, {CFrame = targetCFrame})
@@ -732,10 +745,9 @@ local function toTarget(targetPos)
             if activeTween == Tween then
                 activeTween = nil
                 lastTweenTarget = nil
+                if tweenConnection then tweenConnection:Disconnect() tweenConnection = nil end
                 DisableNoclip()
-                if Character:FindFirstChild("PartTele") then
-                    Character.PartTele:Destroy()
-                end
+                if PartTele then PartTele:Destroy() end
             end
         end
     end)
@@ -1538,6 +1550,7 @@ task.spawn(function()
                             if (LocalPlayer.Character.HumanoidRootPart.Position - farmPos.Position).Magnitude <= 50 then
                                 -- Close enough: Lock On directly
                                 if activeTween then activeTween:Cancel() activeTween = nil end
+                                if tweenConnection then tweenConnection:Disconnect() tweenConnection = nil end
                                 if LocalPlayer.Character:FindFirstChild("PartTele") then LocalPlayer.Character.PartTele:Destroy() end
                                 
                                 LocalPlayer.Character.HumanoidRootPart.CFrame = farmPos
