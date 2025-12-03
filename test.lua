@@ -908,115 +908,145 @@ local QuestDatabase = {
 }
 
 local function GetQuestData(level)
-    local GuideModule = require(ReplicatedStorage.GuideModule)
-    local Quests = require(ReplicatedStorage.Quests)
-    
-    local npcPosition = nil
-    local questLevel = 0
-    local levelRequire = 0
-    local questName = ""
-    local mobName = ""
-    local mobNameClean = ""
+    local success, result = pcall(function()
+        local GuideModule = require(ReplicatedStorage.GuideModule)
+        local Quests = require(ReplicatedStorage.Quests)
+        
+        local npcPosition = nil
+        local questLevel = 0
+        local levelRequire = 0
+        local questName = ""
+        local mobName = ""
+        local mobNameClean = ""
 
-    -- Special handling for low levels (Redz logic)
-    if level >= 1 and level <= 9 then
-        if tostring(LocalPlayer.Team) == "Pirates" then
-            return {Level = 1, Quest = "BanditQuest1", QuestNum = 1, NPCPos = CFrame.new(1059.99, 16.92, 1549.28), Mob = "Bandit", NPCName = "Quest Giver"}
-        else
-            return {Level = 1, Quest = "MarineQuest", QuestNum = 1, NPCPos = CFrame.new(-2709.67, 24.52, 2104.24), Mob = "Trainee", NPCName = "Marine Quest Giver"}
-        end
-    end
-
-    -- Special handling for Prisoner (Redz logic)
-    if level >= 210 and level <= 249 then
-        return {Level = 210, Quest = "PrisonerQuest", QuestNum = 2, NPCPos = CFrame.new(5308.93, 1.65, 475.12), Mob = "Dangerous Prisoner", NPCName = "Quest Giver"}
-    end
-
-    -- Iterate GuideModule to find the best quest
-    for _, npcData in pairs(GuideModule.Data.NPCList) do
-        for index, lvl in pairs(npcData.Levels) do
-            if level >= lvl then
-                if not levelRequire or levelRequire < lvl then
-                    npcPosition = npcData.CFrame
-                    questLevel = index -- This is the QuestNum
-                    levelRequire = lvl
-                end
-                -- Redz logic for 3 levels
-                if #npcData.Levels == 3 and questLevel == 3 then
-                    npcPosition = npcData.CFrame
-                    questLevel = 2
-                    levelRequire = npcData.Levels[2]
-                end
+        -- Special handling for low levels (Redz logic)
+        if level >= 1 and level <= 9 then
+            if tostring(LocalPlayer.Team) == "Pirates" then
+                return {Level = 1, Quest = "BanditQuest1", QuestNum = 1, NPCPos = CFrame.new(1059.99, 16.92, 1549.28), Mob = "Bandit", NPCName = "Quest Giver"}
+            else
+                return {Level = 1, Quest = "MarineQuest", QuestNum = 1, NPCPos = CFrame.new(-2709.67, 24.52, 2104.24), Mob = "Trainee", NPCName = "Marine Quest Giver"}
             end
         end
-    end
 
-    -- Handle Entrance Requests (Sky 3, Underwater)
-    if level >= 375 and level <= 399 and (npcPosition.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude > 3000 then
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", Vector3.new(61163.85, 11.67, 1819.78))
-    end
-    if level >= 400 and level <= 449 and (npcPosition.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude > 3000 then
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", Vector3.new(61163.85, 11.67, 1819.78))
-    end
+        -- Special handling for Prisoner (Redz logic)
+        if level >= 210 and level <= 249 then
+            return {Level = 210, Quest = "PrisonerQuest", QuestNum = 2, NPCPos = CFrame.new(5308.93, 1.65, 475.12), Mob = "Dangerous Prisoner", NPCName = "Quest Giver"}
+        end
 
-    -- Find Quest Name and Mob Name from Quests module
-    for questId, questData in pairs(Quests) do
-        for _, taskData in pairs(questData) do
-            if taskData.LevelReq == levelRequire then
-                -- Exclude CitizenQuest as per Redz
-                if questId ~= "CitizenQuest" then
-                    questName = questId
-                    for _, taskName in pairs(taskData.Task) do
-                        mobName = taskName
-                        mobNameClean = string.split(taskName, " [Lv. " .. taskData.LevelReq .. "]")[1]
+        -- Iterate GuideModule to find the best quest
+        if GuideModule and GuideModule.Data and GuideModule.Data.NPCList then
+            for _, npcData in pairs(GuideModule.Data.NPCList) do
+                for index, lvl in pairs(npcData.Levels) do
+                    if level >= lvl then
+                        if not levelRequire or levelRequire < lvl then
+                            npcPosition = npcData.CFrame
+                            questLevel = index -- This is the QuestNum
+                            levelRequire = lvl
+                        end
+                        -- Redz logic for 3 levels
+                        if #npcData.Levels == 3 and questLevel == 3 then
+                            npcPosition = npcData.CFrame
+                            questLevel = 2
+                            levelRequire = npcData.Levels[2]
+                        end
                     end
                 end
             end
         end
-    end
 
-    -- Special Overrides (Redz logic)
-    if questName ~= "MarineQuest2" and questName ~= "ImpelQuest" and questName ~= "SkyExp1Quest" then
-        if questName == "Area2Quest" and questLevel == 2 then
-            questName = "Area2Quest"
+        -- Handle Entrance Requests (Sky 3, Underwater)
+        if npcPosition then
+             if level >= 375 and level <= 399 and (npcPosition.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude > 3000 then
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", Vector3.new(61163.85, 11.67, 1819.78))
+            end
+            if level >= 400 and level <= 449 and (npcPosition.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude > 3000 then
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", Vector3.new(61163.85, 11.67, 1819.78))
+            end
+        end
+
+        -- Find Quest Name and Mob Name from Quests module
+        if Quests then
+            for questId, questData in pairs(Quests) do
+                for _, taskData in pairs(questData) do
+                    if taskData.LevelReq == levelRequire then
+                        -- Exclude CitizenQuest as per Redz
+                        if questId ~= "CitizenQuest" then
+                            questName = questId
+                            for _, taskName in pairs(taskData.Task) do
+                                mobName = taskName
+                                mobNameClean = string.split(taskName, " [Lv. " .. taskData.LevelReq .. "]")[1]
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Special Overrides (Redz logic)
+        if questName ~= "MarineQuest2" and questName ~= "ImpelQuest" and questName ~= "SkyExp1Quest" then
+            if questName == "Area2Quest" and questLevel == 2 then
+                questName = "Area2Quest"
+                questLevel = 1
+                mobNameClean = "Swan Pirate"
+                levelRequire = 775
+            end
+        elseif questLevel ~= 1 then
+            if questLevel == 2 then
+                npcPosition = CFrame.new(-7859.09, 5544.19, -381.47)
+            end
+        else
+            npcPosition = CFrame.new(-4721.88, 843.87, -1949.96)
+        end
+        
+        if questName == "ImpelQuest" then
+            questName = "PrisonerQuest"
+            questLevel = 2
+            mobNameClean = "Dangerous Prisoner"
+            levelRequire = 210
+            npcPosition = CFrame.new(5310.60, 0.35, 474.94)
+        end
+
+        if questName == "MarineQuest2" then
+            questName = "MarineQuest2"
             questLevel = 1
-            mobNameClean = "Swan Pirate"
-            levelRequire = 775
+            mobNameClean = "Chief Petty Officer"
+            levelRequire = 120
         end
-    elseif questLevel ~= 1 then
-        if questLevel == 2 then
-            npcPosition = CFrame.new(-7859.09, 5544.19, -381.47)
+
+        if questName ~= "" and npcPosition then
+            return {
+                Level = levelRequire,
+                Quest = questName,
+                QuestNum = questLevel,
+                NPCPos = npcPosition,
+                Mob = mobNameClean,
+                NPCName = "Quest Giver"
+            }
         end
-    else
-        npcPosition = CFrame.new(-4721.88, 843.87, -1949.96)
-    end
-    
-    if questName == "ImpelQuest" then
-        questName = "PrisonerQuest"
-        questLevel = 2
-        mobNameClean = "Dangerous Prisoner"
-        levelRequire = 210
-        npcPosition = CFrame.new(5310.60, 0.35, 474.94)
+        return nil
+    end)
+
+    if success and result then
+        return result
     end
 
-    if questName == "MarineQuest2" then
-        questName = "MarineQuest2"
-        questLevel = 1
-        mobNameClean = "Chief Petty Officer"
-        levelRequire = 120
+    -- Fallback to QuestDatabase if GuideModule fails
+    warn("Aero Hub: GuideModule failed, using fallback database.")
+    local bestQuest = nil
+    for _, questData in ipairs(QuestDatabase) do
+        if level >= questData.Level then 
+            local questWorld = 1
+            if questData.Level >= 700 and questData.Level < 1500 then questWorld = 2 end
+            if questData.Level >= 1500 then questWorld = 3 end
+            
+            if CheckSea(questWorld) then
+                bestQuest = questData 
+            end
+        else 
+            break 
+        end
     end
-
-    if questName ~= "" then
-        return {
-            Level = levelRequire,
-            Quest = questName,
-            QuestNum = questLevel,
-            NPCPos = npcPosition,
-            Mob = mobNameClean,
-            NPCName = "Quest Giver"
-        }
-    end
-    return nil
+    return bestQuest
 end
 
 local TravelLookup = {}
@@ -1429,7 +1459,10 @@ task.spawn(function()
                 pcall(function()
                     local level = LocalPlayer.Data.Level.Value
                     local questData = GetQuestData(level)
-                    if not questData then return end
+                    if not questData then 
+                        warn("Aero Hub: No quest data found for level " .. tostring(level))
+                        return 
+                    end
                     
                     local questGui = LocalPlayer.PlayerGui:FindFirstChild("Main") and LocalPlayer.PlayerGui.Main:FindFirstChild("Quest")
                     local hasQuest = questGui and questGui.Visible and (string.find(questGui.Container.QuestTitle.Title.Text, questData.Mob) or string.find(questGui.Container.QuestTitle.Title.Text, "Boss"))
