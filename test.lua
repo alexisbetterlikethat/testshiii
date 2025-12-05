@@ -847,10 +847,10 @@ function requestEntrance(pos)
     task.wait(0.5)
 end
 
--- TP2 Implementation (Redz Logic - Manual CFrame Loop)
+-- TP2 Implementation (Redz "topos" Logic)
 local tweenActive = false
-local tweenId = 0
-local lastTweenTarget = nil
+local currentTween = nil
+local lastTargetPos = nil
 
 function TP2(target)
     local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target) or nil
@@ -866,73 +866,84 @@ function TP2(target)
         return -- Wait for teleport
     end
 
-    -- Check if we need to start a new tween
-    -- Only restart if target changed significantly or we aren't moving
-    if not tweenActive or (not lastTweenTarget or (targetCFrame.Position - lastTweenTarget.Position).Magnitude > 10) then
-        tweenId = tweenId + 1
-        local currentId = tweenId
-        lastTweenTarget = targetCFrame
-        tweenActive = true
+    -- Avoid spamming the same tween
+    if tweenActive and lastTargetPos and (lastTargetPos - targetCFrame.Position).Magnitude < 5 then
+        return
+    end
+    
+    -- Cancel existing tween if new target
+    if currentTween then
+        currentTween:Cancel()
+        currentTween = nil
+    end
+    
+    lastTargetPos = targetCFrame.Position
+    tweenActive = true
+
+    local dist = (hrp.Position - targetCFrame.Position).Magnitude
+    
+    -- Instant TP if very close
+    if dist < 50 then
+        hrp.CFrame = targetCFrame
+        hrp.Velocity = Vector3.zero
+        tweenActive = false
+        return
+    end
+
+    -- Create PartTele if needed
+    if not LocalPlayer.Character:FindFirstChild("PartTele") then
+        local p = Instance.new("Part", LocalPlayer.Character)
+        p.Name = "PartTele"
+        p.Size = Vector3.new(10, 1, 10)
+        p.Anchored = true
+        p.Transparency = 1
+        p.CanCollide = false
+        p.CFrame = hrp.CFrame
         
-        task.spawn(function()
-            local startDist = (hrp.Position - targetCFrame.Position).Magnitude
-            
-            -- Initial Height Adjustment (Sky Path)
-            if startDist > 150 then
-                -- Go up 200 studs to avoid obstacles
-                hrp.CFrame = CFrame.new(hrp.Position.X, math.max(hrp.Position.Y, targetCFrame.Position.Y) + 200, hrp.Position.Z)
-            end
-            
-            -- Movement Loop
-            while LocalPlayer.Character and hrp and currentId == tweenId do
-                local currentPos = hrp.Position
-                local targetPos = targetCFrame.Position
-                local dist = (Vector3.new(currentPos.X, 0, currentPos.Z) - Vector3.new(targetPos.X, 0, targetPos.Z)).Magnitude
+        -- Sync HRP to PartTele (Redz Logic: Maintain Target Y Height)
+        p:GetPropertyChangedSignal("CFrame"):Connect(function()
+            if not p or not p.Parent or not tweenActive then return end
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local partPos = p.CFrame.Position
+                -- Redz Logic: Set Y to Target Y immediately to avoid diagonal collision
+                -- But we use math.max to ensure we don't go underground if target is lower
+                local safeY = math.max(partPos.Y, lastTargetPos.Y) 
+                -- Actually Redz uses exactly target Y: pu208.Position.Y
+                -- We will use Target Y as requested, but maybe add a safety check?
+                -- Let's stick to Redz exact logic: Target Y.
                 
-                -- Break if close enough (Horizontal distance)
-                if dist < 10 then
-                    break
-                end
+                LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(partPos.X, lastTargetPos.Y, partPos.Z)
+                LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
                 
-                -- Calculate Movement
-                local dir = (Vector3.new(targetPos.X, 0, targetPos.Z) - Vector3.new(currentPos.X, 0, currentPos.Z)).Unit
-                local speed = 350
-                if startDist < 250 then speed = 600 end -- Faster for short hops
-                
-                local dt = task.wait()
-                local moveStep = dir * (speed * dt)
-                
-                -- Apply Movement
-                hrp.CFrame = hrp.CFrame + moveStep
-                hrp.Velocity = Vector3.zero
-                
-                -- Keep Y level (Sky Path maintenance)
-                if startDist > 150 then
-                     hrp.CFrame = CFrame.new(hrp.Position.X, math.max(targetCFrame.Position.Y, currentPos.Y), hrp.Position.Z)
-                else
-                     -- Direct path Y adjustment
-                     local yDiff = targetPos.Y - currentPos.Y
-                     local yStep = math.sign(yDiff) * math.min(math.abs(yDiff), speed * dt)
-                     hrp.CFrame = hrp.CFrame + Vector3.new(0, yStep, 0)
-                end
-                
-                -- Noclip
                 if LocalPlayer.Character:FindFirstChild("Humanoid") then
-                    LocalPlayer.Character.Humanoid:ChangeState(11) -- PlatformStand
+                    LocalPlayer.Character.Humanoid.PlatformStand = true
                 end
-            end
-            
-            -- Final Snap
-            if currentId == tweenId then
-                hrp.CFrame = targetCFrame
-                hrp.Velocity = Vector3.zero
-                if LocalPlayer.Character:FindFirstChild("Humanoid") then
-                    LocalPlayer.Character.Humanoid.PlatformStand = false
-                end
-                tweenActive = false
             end
         end)
     end
+    
+    local p = LocalPlayer.Character.PartTele
+    p.CFrame = hrp.CFrame -- Start from current
+    
+    -- Calculate Speed
+    local speed = 350
+    if dist <= 300 then speed = 1000 end
+    
+    local info = TweenInfo.new(dist / speed, Enum.EasingStyle.Linear)
+    currentTween = TweenService:Create(p, info, {CFrame = targetCFrame})
+    currentTween:Play()
+    
+    currentTween.Completed:Connect(function(state)
+        if state == Enum.PlaybackState.Completed then
+            tweenActive = false
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
+                LocalPlayer.Character.PartTele:Destroy()
+            end
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                LocalPlayer.Character.Humanoid.PlatformStand = false
+            end
+        end
+    end)
 end
 
 -- Fast Attack (Optimized)
@@ -1728,11 +1739,16 @@ task.spawn(function()
         end
         -- Reset Farm Position if disabled
         if not _G.Settings.Main["Auto Farm Level"] then
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
+                LocalPlayer.Character.PartTele:Destroy()
+            end
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
                 LocalPlayer.Character.Humanoid.PlatformStand = false
             end
             tweenActive = false
-            lastTweenTarget = nil
+            if currentTween then currentTween:Cancel() end
+            currentTween = nil
+            lastTargetPos = nil
         end
     end
 end)
