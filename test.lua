@@ -847,7 +847,10 @@ function requestEntrance(pos)
     task.wait(0.5)
 end
 
--- TP2 Implementation (Redz Logic - Persistent PartTele)
+-- TP2 Implementation (Redz Logic - Persistent PartTele with Sky Fix)
+local lastTweenTarget = nil
+local isTweening = false
+
 function TP2(target)
     local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target) or nil
     if not targetCFrame then return end
@@ -862,11 +865,24 @@ function TP2(target)
         return -- Wait for teleport
     end
 
-    -- Calculate Distance & Speed
-    local dist = (hrp.Position - targetCFrame.Position).Magnitude
-    local speed = 350
-    if dist <= 300 then speed = 1000 end -- Faster for short distances
+    -- Prevent spamming tweens to the same location (Fixes infinite sky climb)
+    if isTweening and lastTweenTarget and (lastTweenTarget.Position - targetCFrame.Position).Magnitude < 10 then
+        return
+    end
     
+    lastTweenTarget = targetCFrame
+    isTweening = true
+
+    -- Calculate Distance
+    local dist = (hrp.Position - targetCFrame.Position).Magnitude
+    
+    -- Instant TP if very close
+    if dist < 50 then
+        hrp.CFrame = targetCFrame
+        isTweening = false
+        return
+    end
+
     -- Create or Get PartTele
     if not LocalPlayer.Character:FindFirstChild("PartTele") then
         local p = Instance.new("Part", LocalPlayer.Character)
@@ -877,7 +893,7 @@ function TP2(target)
         p.CanCollide = false
         p.CFrame = hrp.CFrame
         
-        -- Sync HRP to PartTele (The Redz "Lock" Mechanism)
+        -- Sync HRP to PartTele
         p:GetPropertyChangedSignal("CFrame"):Connect(function()
             if not p or not p.Parent then return end
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -889,24 +905,60 @@ function TP2(target)
                 end
             end
         end)
+        
+        -- Noclip Loop (Prevent Flinging)
+        task.spawn(function()
+            while p and p.Parent do
+                if LocalPlayer.Character then
+                    for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+                        if v:IsA("BasePart") and v.CanCollide then
+                            v.CanCollide = false
+                        end
+                    end
+                end
+                task.wait()
+            end
+        end)
     end
     
     local p = LocalPlayer.Character.PartTele
-    local info = TweenInfo.new(dist / speed, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(p, info, {CFrame = targetCFrame})
-    tween:Play()
+    local speed = 350
+    if dist <= 250 then speed = 600 end
     
-    -- Only destroy if completed (not cancelled/overridden)
-    tween.Completed:Connect(function(state)
-        if state == Enum.PlaybackState.Completed then
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
-                LocalPlayer.Character.PartTele:Destroy()
+    -- Sky Tween Logic (Avoid Islands)
+    if dist > 150 then
+        local skyHeight = 300
+        local startSky = CFrame.new(hrp.Position.X, math.max(hrp.Position.Y, targetCFrame.Position.Y) + skyHeight, hrp.Position.Z)
+        local endSky = CFrame.new(targetCFrame.Position.X, math.max(hrp.Position.Y, targetCFrame.Position.Y) + skyHeight, targetCFrame.Position.Z)
+        
+        -- 1. Go Up
+        p.CFrame = startSky
+        
+        -- 2. Tween Across
+        local info = TweenInfo.new(dist / speed, Enum.EasingStyle.Linear)
+        local tween = TweenService:Create(p, info, {CFrame = endSky})
+        tween:Play()
+        
+        tween.Completed:Connect(function(state)
+            if state == Enum.PlaybackState.Completed then
+                -- 3. Drop Down
+                p.CFrame = targetCFrame
+                isTweening = false
             end
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                LocalPlayer.Character.Humanoid.PlatformStand = false
+        end)
+    else
+        -- Direct Tween (Short Distance)
+        p.CFrame = hrp.CFrame -- Start from current
+        local info = TweenInfo.new(dist / speed, Enum.EasingStyle.Linear)
+        local tween = TweenService:Create(p, info, {CFrame = targetCFrame})
+        tween:Play()
+        
+        tween.Completed:Connect(function(state)
+            if state == Enum.PlaybackState.Completed then
+                isTweening = false
             end
-        end
-    end)
+        end)
+    end
 end
 
 -- Fast Attack (Optimized)
@@ -1708,6 +1760,8 @@ task.spawn(function()
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
                 LocalPlayer.Character.Humanoid.PlatformStand = false
             end
+            isTweening = false
+            lastTweenTarget = nil
         end
     end
 end)
