@@ -847,10 +847,9 @@ function requestEntrance(pos)
     task.wait(0.5)
 end
 
--- TP2 Implementation (Redz "topos" Logic)
+-- TP2 Implementation (Simplified & Stable)
 local tweenActive = false
 local currentTween = nil
-local lastTargetPos = nil
 
 function TP2(target)
     local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target) or nil
@@ -859,34 +858,16 @@ function TP2(target)
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
     local hrp = LocalPlayer.Character.HumanoidRootPart
     
-    -- Check Teleporters
-    local teleporter = CheckNearestTeleporter(targetCFrame.Position)
-    if teleporter then
-        requestEntrance(teleporter)
-        return -- Wait for teleport
-    end
-
-    -- Avoid spamming the same tween
-    if tweenActive and lastTargetPos and (lastTargetPos - targetCFrame.Position).Magnitude < 5 then
-        return
-    end
-    
-    -- Cancel existing tween if new target
-    if currentTween then
-        currentTween:Cancel()
-        currentTween = nil
-    end
-    
-    lastTargetPos = targetCFrame.Position
-    tweenActive = true
-
+    -- Calculate Distance
     local dist = (hrp.Position - targetCFrame.Position).Magnitude
     
-    -- Instant TP if very close
+    -- Instant TP if very close (and stop tweening)
     if dist < 50 then
+        if currentTween then currentTween:Cancel() end
+        tweenActive = false
+        
         hrp.CFrame = targetCFrame
         hrp.Velocity = Vector3.zero
-        tweenActive = false
         return
     end
 
@@ -900,19 +881,11 @@ function TP2(target)
         p.CanCollide = false
         p.CFrame = hrp.CFrame
         
-        -- Sync HRP to PartTele (Redz Logic: Maintain Target Y Height)
+        -- Sync HRP to PartTele
         p:GetPropertyChangedSignal("CFrame"):Connect(function()
-            if not p or not p.Parent or not tweenActive then return end
+            if not p or not p.Parent then return end
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                local partPos = p.CFrame.Position
-                -- Redz Logic: Set Y to Target Y immediately to avoid diagonal collision
-                -- But we use math.max to ensure we don't go underground if target is lower
-                local safeY = math.max(partPos.Y, lastTargetPos.Y) 
-                -- Actually Redz uses exactly target Y: pu208.Position.Y
-                -- We will use Target Y as requested, but maybe add a safety check?
-                -- Let's stick to Redz exact logic: Target Y.
-                
-                LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(partPos.X, lastTargetPos.Y, partPos.Z)
+                LocalPlayer.Character.HumanoidRootPart.CFrame = p.CFrame
                 LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
                 
                 if LocalPlayer.Character:FindFirstChild("Humanoid") then
@@ -923,9 +896,15 @@ function TP2(target)
     end
     
     local p = LocalPlayer.Character.PartTele
+    
+    -- Only start new tween if not already moving to this target
+    if tweenActive and (p.CFrame.Position - targetCFrame.Position).Magnitude < 10 then
+        return
+    end
+    
+    tweenActive = true
     p.CFrame = hrp.CFrame -- Start from current
     
-    -- Calculate Speed
     local speed = 350
     if dist <= 300 then speed = 1000 end
     
@@ -1657,6 +1636,7 @@ task.spawn(function()
                     local hasQuest = questGui and questGui.Visible and (string.find(questGui.Container.QuestTitle.Title.Text, questData.Mob) or string.find(questGui.Container.QuestTitle.Title.Text, "Boss"))
                     
                     if not hasQuest then
+                        if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
                         -- Abandon wrong quest
                         if questGui and questGui.Visible then
                             ReplicatedStorage.Remotes.CommF_:InvokeServer("AbandonQuest")
@@ -1691,8 +1671,24 @@ task.spawn(function()
                             -- Teleport to Enemy (Redz Logic: TP2)
                             local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0) -- Hover 30 studs above
                             
-                            -- Always use TP2 for movement and locking
-                            TP2(farmPos)
+                            -- Distance Check for TP vs Lock
+                            if (LocalPlayer.Character.HumanoidRootPart.Position - farmPos.Position).Magnitude > 50 then
+                                -- Far away: Use TP2
+                                if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
+                                TP2(farmPos)
+                            else
+                                -- Close enough: Lock On directly (Anchor)
+                                if LocalPlayer.Character:FindFirstChild("PartTele") then LocalPlayer.Character.PartTele:Destroy() end
+                                
+                                local hrp = LocalPlayer.Character.HumanoidRootPart
+                                hrp.CFrame = farmPos * CFrame.Angles(math.rad(-90), 0, 0)
+                                hrp.Velocity = Vector3.zero
+                                hrp.Anchored = true
+                                
+                                if LocalPlayer.Character:FindFirstChild("Humanoid") then
+                                    LocalPlayer.Character.Humanoid.PlatformStand = true
+                                end
+                            end
                             
                             -- Magnet / Bring Mob Logic
                             if (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 60 then
@@ -1723,6 +1719,8 @@ task.spawn(function()
                             -- FastAttack is handled by the Heartbeat loop
                         else
                             -- No enemy found: Go to Spawn
+                            if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
+                            
                             local spawns = GetMobSpawns(targetName)
                             if #spawns > 0 then
                                 -- Cycle spawns if needed, or just go to the first one
@@ -1745,10 +1743,12 @@ task.spawn(function()
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
                 LocalPlayer.Character.Humanoid.PlatformStand = false
             end
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                LocalPlayer.Character.HumanoidRootPart.Anchored = false
+            end
             tweenActive = false
             if currentTween then currentTween:Cancel() end
             currentTween = nil
-            lastTargetPos = nil
         end
     end
 end)
