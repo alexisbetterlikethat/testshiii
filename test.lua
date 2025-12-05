@@ -774,74 +774,194 @@ local function ApproachEnemy(enemy, hoverHeight)
     end
 end
 
--- Fast Attack
-FastAttack = {Distance = 100}
+-- Fast Attack & Helper Functions (Redz Logic)
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+-- Helper: Distance Check
+function dist(p1, p2, useY)
+    if not p1 or not p2 then return math.huge end
+    local pos1 = (typeof(p1) == "Instance" and (p1:IsA("Model") and p1.PrimaryPart.Position or p1.Position)) or (typeof(p1) == "CFrame" and p1.Position) or p1
+    local pos2 = (typeof(p2) == "Instance" and (p2:IsA("Model") and p2.PrimaryPart.Position or p2.Position)) or (typeof(p2) == "CFrame" and p2.Position) or p2
+    
+    if useY then
+        return (pos1 - pos2).Magnitude
+    else
+        return (Vector3.new(pos1.X, 0, pos1.Z) - Vector3.new(pos2.X, 0, pos2.Z)).Magnitude
+    end
+end
+
+-- Helper: Teleporters
+function CheckNearestTeleporter(targetPos)
+    local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+    local minDist = math.huge
+    local bestTeleporter = nil
+    local placeId = game.PlaceId
+    
+    local teleporters = {}
+    if placeId == 2753915549 then -- World 1
+        teleporters = {
+            ["Sky3"] = Vector3.new(-7894, 5547, -380),
+            ["Sky3Exit"] = Vector3.new(-4607, 874, -1667),
+            ["UnderWater"] = Vector3.new(61163, 11, 1819),
+            ["UnderwaterExit"] = Vector3.new(4050, -1, -1814)
+        }
+    elseif placeId == 4442272183 then -- World 2
+        teleporters = {
+            ["Swan Mansion"] = Vector3.new(-390, 332, 673),
+            ["Swan Room"] = Vector3.new(2285, 15, 905),
+            ["Cursed Ship"] = Vector3.new(923, 126, 32852),
+            ["Zombie Island"] = Vector3.new(-6509, 83, -133)
+        }
+    elseif placeId == 7449423635 then -- World 3
+        teleporters = {
+            ["Floating Turtle"] = Vector3.new(-12462, 375, -7552),
+            ["Hydra Island"] = Vector3.new(5662, 1013, -335),
+            ["Mansion"] = Vector3.new(-12462, 375, -7552),
+            ["Castle"] = Vector3.new(-5036, 315, -3179),
+            ["Beautiful Pirate"] = Vector3.new(5319, 23, -93),
+            ["Beautiful Room"] = Vector3.new(5314.58, 22.54, -125.94),
+            ["Temple of Time"] = Vector3.new(28286, 14897, 103)
+        }
+    end
+
+    for name, pos in pairs(teleporters) do
+        local d = (pos - targetPos).Magnitude
+        if d < minDist then
+            minDist = d
+            bestTeleporter = pos
+        end
+    end
+
+    if minDist < (targetPos - myPos).Magnitude then
+        return bestTeleporter
+    end
+    return nil
+end
+
+function requestEntrance(pos)
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", pos)
+    local hrp = LocalPlayer.Character.HumanoidRootPart
+    hrp.CFrame = hrp.CFrame + Vector3.new(0, 50, 0)
+    task.wait(0.5)
+end
+
+-- TP2 Implementation (Redz Logic)
+local tweenActive = false
+local tweenId = 0
+local lastTweenTarget = nil
+
+function TP2(target)
+    local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target) or nil
+    if not targetCFrame then return end
+    
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local hrp = LocalPlayer.Character.HumanoidRootPart
+    
+    -- Check Teleporters
+    local teleporter = CheckNearestTeleporter(targetCFrame.Position)
+    if teleporter then
+        requestEntrance(teleporter)
+        return -- Wait for teleport
+    end
+
+    -- Tween Logic
+    local dist = (hrp.Position - targetCFrame.Position).Magnitude
+    
+    -- Instant TP if close
+    if dist < 50 then
+        hrp.CFrame = targetCFrame
+        hrp.Velocity = Vector3.zero
+        return
+    end
+
+    -- Tween
+    local speed = 350
+    if dist <= 300 then speed = 1000 end -- Faster for short distances
+    
+    local info = TweenInfo.new(dist / speed, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(hrp, info, {CFrame = targetCFrame})
+    
+    -- Bypass Anti-Cheat / Noclip
+    if not LocalPlayer.Character:FindFirstChild("PartTele") then
+        local p = Instance.new("Part", LocalPlayer.Character)
+        p.Name = "PartTele"
+        p.Size = Vector3.new(10, 1, 10)
+        p.Anchored = true
+        p.Transparency = 1
+        p.CanCollide = false
+        p.CFrame = hrp.CFrame
+        
+        -- Sync HRP to PartTele
+        local conn
+        conn = RunService.Stepped:Connect(function()
+            if not p or not p.Parent then conn:Disconnect() return end
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = p.CFrame
+                LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
+                if LocalPlayer.Character:FindFirstChild("Humanoid") then
+                    LocalPlayer.Character.Humanoid:ChangeState(11) -- PlatformStand
+                end
+            end
+        end)
+        
+        local t = TweenService:Create(p, info, {CFrame = targetCFrame})
+        t:Play()
+        t.Completed:Connect(function()
+            p:Destroy()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                LocalPlayer.Character.Humanoid:ChangeState(18) -- FallingDown (Reset)
+            end
+        end)
+    end
+end
+
+-- Fast Attack (Optimized)
+FastAttack = {
+    Distance = 60,
+    Enabled = false
+}
+
 local RegisterAttack
 local RegisterHit
 
 task.spawn(function()
-    pcall(function()
-        local Net = ReplicatedStorage:WaitForChild("Modules", 10):WaitForChild("Net", 10)
-        if Net then
-            RegisterAttack = Net:WaitForChild("RE/RegisterAttack", 10)
-            RegisterHit = Net:WaitForChild("RE/RegisterHit", 10)
-        end
-    end)
+    local Net = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net")
+    RegisterAttack = Net:WaitForChild("RE/RegisterAttack")
+    RegisterHit = Net:WaitForChild("RE/RegisterHit")
 end)
 
 function FastAttack:AttackNearest()
     if not RegisterAttack or not RegisterHit then return end
     
-    local OthersEnemies = {}
-    local BasePart = nil
     local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
 
+    local enemiesToHit = {}
+    local baseEnemy = nil
+
     if workspace:FindFirstChild("Enemies") then
-        for _, Enemy in pairs(workspace.Enemies:GetChildren()) do
-            if Enemy:FindFirstChild("Humanoid") and Enemy.Humanoid.Health > 0 then
-                local enemyRoot = Enemy:FindFirstChild("HumanoidRootPart") or Enemy:FindFirstChild("Head")
-                if enemyRoot and (enemyRoot.Position - myRoot.Position).Magnitude < self.Distance then
-                    table.insert(OthersEnemies, {Enemy, enemyRoot})
-                    BasePart = enemyRoot
+        for _, enemy in pairs(workspace.Enemies:GetChildren()) do
+            if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
+                if (enemy.HumanoidRootPart.Position - myRoot.Position).Magnitude <= self.Distance then
+                    table.insert(enemiesToHit, {enemy, enemy.HumanoidRootPart})
+                    baseEnemy = enemy.HumanoidRootPart
                 end
             end
         end
     end
-    if #OthersEnemies > 0 and BasePart then
-        pcall(function()
-            RegisterAttack:FireServer(0)
-            RegisterHit:FireServer(BasePart, OthersEnemies)
-        end)
+
+    if #enemiesToHit > 0 and baseEnemy then
+        RegisterAttack:FireServer(0)
+        RegisterHit:FireServer(baseEnemy, enemiesToHit)
     end
 end
 
-task.spawn(function()
-    while task.wait() do
-        if _G.Settings.Configs["Fast Attack"] and LocalPlayer.Character then
-            FastAttack:AttackNearest()
-        end
-    end
-end)
-
-task.spawn(function()
-    while true do
-        local delay = (_G.Settings.Configs and _G.Settings.Configs["Fast Attack"]) and 0 or 0.06
-        task.wait(delay)
-        if ShouldAutoClick() then
-            local target = GetClosestActiveEnemy(95)
-            if target then
-                AnchorEnemy(target)
-                if EquipPreferredWeapon() then
-                    EnsureHaki()
-                    ReleaseSit()
-                    PerformBasicAttack()
-                    if _G.Settings.Configs and _G.Settings.Configs["Fast Attack"] then
-                        FastAttack:AttackNearest()
-                    end
-                end
-            end
-        end
+-- Fast Attack Loop (Heartbeat for max speed)
+RunService.Heartbeat:Connect(function()
+    if _G.Settings.Configs["Fast Attack"] and LocalPlayer.Character then
+        FastAttack:AttackNearest()
     end
 end)
 
@@ -1517,78 +1637,69 @@ task.spawn(function()
 
                         -- Go to Quest Giver
                         if (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude > 20 then
-                            toTarget(questData.NPCPos)
+                            TP2(questData.NPCPos)
                         else
                             ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", questData.Quest, questData.QuestNum)
                             task.wait(0.5)
                         end
                     else
                         -- Quest Active: Find and Kill
-                        local targetEnemy = GetClosestEnemy(questData.Mob)
+                        local targetName = questData.Mob
+                        local enemy = nil
                         
-                        if targetEnemy and targetEnemy:FindFirstChild("HumanoidRootPart") and targetEnemy:FindFirstChild("Humanoid") and targetEnemy.Humanoid.Health > 0 then
-                            -- Attack Loop
-                            local enemyRoot = targetEnemy.HumanoidRootPart
-                            local enemyHumanoid = targetEnemy.Humanoid
-                            
-                            -- Teleport Above Mob (Redz Style Offset)
-                            local farmPos = enemyRoot.CFrame * CFrame.new(0, 40, 0) 
-                            
-                            if (LocalPlayer.Character.HumanoidRootPart.Position - farmPos.Position).Magnitude <= 50 then
-                                -- Close enough: Lock On directly
-                                if activeTween then activeTween:Cancel() activeTween = nil end
-                                if LocalPlayer.Character:FindFirstChild("PartTele") then 
-                                    LocalPlayer.Character.PartTele:Destroy()
-                                    DisableNoclip()
+                        -- Find closest living enemy
+                        if workspace:FindFirstChild("Enemies") then
+                            for _, v in pairs(workspace.Enemies:GetChildren()) do
+                                if v.Name == targetName and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and v:FindFirstChild("HumanoidRootPart") then
+                                    if not enemy or (LocalPlayer.Character.HumanoidRootPart.Position - v.HumanoidRootPart.Position).Magnitude < (LocalPlayer.Character.HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude then
+                                        enemy = v
+                                    end
                                 end
-                                
-                                LocalPlayer.Character.HumanoidRootPart.CFrame = farmPos
-                                LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
-                                if LocalPlayer.Character:FindFirstChild("Humanoid") then
-                                    LocalPlayer.Character.Humanoid.PlatformStand = true
-                                end
-                            else
-                                -- Far away: Tween
-                                toTarget(farmPos)
                             end
+                        end
+                        
+                        if enemy and enemy:FindFirstChild("HumanoidRootPart") then
+                            -- Teleport to Enemy (Redz Logic: TP2)
+                            local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0) -- Hover 30 studs above
+                            TP2(farmPos)
                             
-                            -- Modify Enemy (Stun)
-                            enemyRoot.CanCollide = false
-                            enemyRoot.Size = Vector3.new(60, 60, 60) -- Keep target big for hitting
-                            enemyHumanoid.WalkSpeed = 0
-                            enemyHumanoid.JumpPower = 0
-                            if targetEnemy:FindFirstChild("Head") then targetEnemy.Head.CanCollide = false end
-                            
-                            -- Bring Neighbors
-                            if _G.Settings.Main["Mob Aura"] then -- Only bring if Aura is enabled or we want it
-                                BringMob(targetEnemy)
+                            -- Magnet / Bring Mob Logic
+                            if (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 60 then
+                                -- Lock enemy in place
+                                enemy.HumanoidRootPart.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, -4, 0) -- Bring slightly below/front
+                                enemy.HumanoidRootPart.CanCollide = false
+                                enemy.Humanoid.WalkSpeed = 0
+                                enemy.Humanoid.JumpPower = 0
+                                if enemy.Humanoid:FindFirstChild("Animator") then enemy.Humanoid.Animator:Destroy() end
+                                enemy.Humanoid:ChangeState(11) -- PlatformStand
+                                
+                                -- Bring other nearby mobs
+                                for _, other in pairs(workspace.Enemies:GetChildren()) do
+                                    if other.Name == targetName and other ~= enemy and other:FindFirstChild("HumanoidRootPart") and other:FindFirstChild("Humanoid") and other.Humanoid.Health > 0 then
+                                        if (other.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 300 then
+                                            other.HumanoidRootPart.CFrame = enemy.HumanoidRootPart.CFrame
+                                            other.HumanoidRootPart.CanCollide = false
+                                            other.Humanoid.WalkSpeed = 0
+                                            other.Humanoid:ChangeState(11)
+                                        end
+                                    end
+                                end
                             end
                             
                             -- Attack
-                            if EquipPreferredWeapon() then
-                                EnsureHaki()
-                                ReleaseSit()
-                                PerformBasicAttack()
-                                if _G.Settings.Configs["Fast Attack"] and FastAttack and FastAttack.AttackNearest then
-                                    FastAttack:AttackNearest()
-                                end
-                            end
+                            EquipPreferredWeapon()
+                            EnsureHaki()
+                            -- FastAttack is handled by the Heartbeat loop
                         else
-                            -- Mob not found: Cycle Spawn Points (Redz Logic)
-                            local spawns = GetMobSpawns(questData.Mob)
+                            -- No enemy found: Go to Spawn
+                            local spawns = GetMobSpawns(targetName)
                             if #spawns > 0 then
-                                if spawnIndex > #spawns then spawnIndex = 1 end
-                                local targetSpawn = spawns[spawnIndex]
-                                
-                                toTarget(targetSpawn * CFrame.new(0, 50, 0))
-                                
-                                if (LocalPlayer.Character.HumanoidRootPart.Position - targetSpawn.Position).Magnitude < 20 then
-                                    spawnIndex = spawnIndex + 1
-                                end
+                                -- Cycle spawns if needed, or just go to the first one
+                                local targetSpawn = spawns[1]
+                                TP2(targetSpawn * CFrame.new(0, 30, 0))
                             else
-                                warn("Aero Hub: Could not find spawn for " .. tostring(questData.Mob))
-                                -- Fallback: Hover at Quest Giver (only if spawn not found)
-                                toTarget(questData.NPCPos * CFrame.new(0, 50, 0))
+                                -- Fallback: Hover at Quest Giver
+                                TP2(questData.NPCPos * CFrame.new(0, 30, 0))
                             end
                         end
                     end
