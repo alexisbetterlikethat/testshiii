@@ -847,7 +847,7 @@ function requestEntrance(pos)
     task.wait(0.5)
 end
 
--- TP2 Implementation (Pure Tween for Travel & Hover)
+-- TP2 Implementation (Direct Tween - Simple & Effective)
 local currentTween = nil
 
 function TP2(target)
@@ -856,7 +856,8 @@ function TP2(target)
     
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
     local hrp = LocalPlayer.Character.HumanoidRootPart
-    
+    local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+
     -- Check Teleporters (Only for long distances)
     if (hrp.Position - targetCFrame.Position).Magnitude > 500 then
         local teleporter = CheckNearestTeleporter(targetCFrame.Position)
@@ -866,48 +867,36 @@ function TP2(target)
         end
     end
 
-    -- Create PartTele if needed
-    if not LocalPlayer.Character:FindFirstChild("PartTele") then
-        local p = Instance.new("Part", LocalPlayer.Character)
-        p.Name = "PartTele"
-        p.Size = Vector3.new(10, 1, 10)
-        p.Anchored = true
-        p.Transparency = 1
-        p.CanCollide = false
-        p.CFrame = hrp.CFrame
-        
-        -- Sync HRP to PartTele (Tween Lock)
-        p:GetPropertyChangedSignal("CFrame"):Connect(function()
-            if not p or not p.Parent then return end
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                LocalPlayer.Character.HumanoidRootPart.CFrame = p.CFrame
-                LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
-                
-                if LocalPlayer.Character:FindFirstChild("Humanoid") then
-                    LocalPlayer.Character.Humanoid.PlatformStand = true
-                end
-            end
-        end)
+    -- Setup Anti-Gravity / Physics Override
+    local bv = hrp:FindFirstChild("BodyVelocity") or Instance.new("BodyVelocity")
+    bv.Name = "BodyVelocity"
+    bv.Parent = hrp
+    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bv.Velocity = Vector3.zero
+    
+    if humanoid then
+        humanoid.PlatformStand = true
     end
     
-    local p = LocalPlayer.Character.PartTele
-    local dist = (p.Position - targetCFrame.Position).Magnitude
-    
-    -- Speed Calculation
+    -- Calculate Tween Info
+    local dist = (hrp.Position - targetCFrame.Position).Magnitude
     local speed = 350
     if dist > 500 then speed = 500 end
     
-    -- Minimum tween time for smoothness
     local tweenTime = dist / speed
-    if tweenTime < 0.05 then tweenTime = 0.05 end
     
-    -- Only start new tween if target changed significantly
-    if (p.CFrame.Position - targetCFrame.Position).Magnitude > 1 then
-        if currentTween then currentTween:Cancel() end
-        local info = TweenInfo.new(tweenTime, Enum.EasingStyle.Linear)
-        currentTween = TweenService:Create(p, info, {CFrame = targetCFrame})
-        currentTween:Play()
+    -- If very close, just snap (prevents micro-stuttering)
+    if dist < 5 then
+        hrp.CFrame = targetCFrame
+        return
     end
+    
+    -- Cancel previous tween if it exists
+    if currentTween then currentTween:Cancel() end
+    
+    local info = TweenInfo.new(tweenTime, Enum.EasingStyle.Linear)
+    currentTween = TweenService:Create(hrp, info, {CFrame = targetCFrame})
+    currentTween:Play()
 end
 
 -- Fast Attack (Optimized)
@@ -1707,14 +1696,12 @@ task.spawn(function()
         end
         -- Reset Farm Position if disabled
         if not _G.Settings.Main["Auto Farm Level"] then
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
-                LocalPlayer.Character.PartTele:Destroy()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local bv = LocalPlayer.Character.HumanoidRootPart:FindFirstChild("BodyVelocity")
+                if bv then bv:Destroy() end
             end
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
                 LocalPlayer.Character.Humanoid.PlatformStand = false
-            end
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                LocalPlayer.Character.HumanoidRootPart.Anchored = false
             end
             if currentTween then currentTween:Cancel() end
             currentTween = nil
