@@ -964,14 +964,27 @@ RunService.Heartbeat:Connect(function()
         FastAttack:AttackNearest()
     end
     
-    -- Farm Position Lock (Anti-Gravity / Hover Fix)
+    -- Farm Position Lock (Anchor Method for Smoothness)
     if _G.FarmPosition and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = LocalPlayer.Character.HumanoidRootPart
-        hrp.CFrame = CFrame.new(_G.FarmPosition.Position) * CFrame.Angles(math.rad(-90), 0, 0) -- Look down
-        hrp.Velocity = Vector3.zero
+        
+        -- Smoothly interpolate to the target position if we are close
+        if (hrp.Position - _G.FarmPosition.Position).Magnitude < 5 then
+            hrp.Anchored = true
+            hrp.CFrame = hrp.CFrame:Lerp(_G.FarmPosition * CFrame.Angles(math.rad(-90), 0, 0), 0.5)
+        else
+            hrp.Anchored = false
+            hrp.CFrame = _G.FarmPosition * CFrame.Angles(math.rad(-90), 0, 0)
+            hrp.Velocity = Vector3.zero
+        end
         
         if LocalPlayer.Character:FindFirstChild("Humanoid") then
             LocalPlayer.Character.Humanoid.PlatformStand = true
+        end
+    else
+        -- Unanchor if not farming/locking
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Anchored then
+             LocalPlayer.Character.HumanoidRootPart.Anchored = false
         end
     end
 end)
@@ -1640,6 +1653,7 @@ task.spawn(function()
                     
                     if not hasQuest then
                         _G.FarmPosition = nil -- Stop locking while getting quest
+                        if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
                         -- Abandon wrong quest
                         if questGui and questGui.Visible then
                             ReplicatedStorage.Remotes.CommF_:InvokeServer("AbandonQuest")
@@ -1677,6 +1691,7 @@ task.spawn(function()
                             -- Distance Check for TP vs Lock
                             if (LocalPlayer.Character.HumanoidRootPart.Position - farmPos.Position).Magnitude > 50 then
                                 _G.FarmPosition = nil -- Stop locking
+                                if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
                                 TP2(farmPos)
                             else
                                 _G.FarmPosition = farmPos -- Lock position
@@ -1711,6 +1726,7 @@ task.spawn(function()
                             -- FastAttack is handled by the Heartbeat loop
                         else
                             _G.FarmPosition = nil -- Stop locking if no enemy
+                            if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
                             -- No enemy found: Go to Spawn
                             local spawns = GetMobSpawns(targetName)
                             if #spawns > 0 then
@@ -1729,6 +1745,9 @@ task.spawn(function()
         -- Reset Farm Position if disabled
         if not _G.Settings.Main["Auto Farm Level"] then
             _G.FarmPosition = nil
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Anchored then
+                 LocalPlayer.Character.HumanoidRootPart.Anchored = false
+            end
         end
     end
 end)
