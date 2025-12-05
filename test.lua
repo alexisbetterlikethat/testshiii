@@ -27,6 +27,7 @@ Window:CreateHomeTab({
 })
 
 -- Global Settings
+_G.FarmPosition = nil
 _G.Settings = {
     Main = {
         ["Auto Kaitun"] = false,
@@ -860,11 +861,10 @@ function TP2(target)
     local hrp = LocalPlayer.Character.HumanoidRootPart
     
     -- Check Teleporters
-    local teleporter = CheckNearestTeleporter(targetCFrame.Position)
-    if teleporter then
-        requestEntrance(teleporter)
-        return -- Wait for teleport
-    end
+    -- local teleporter = CheckNearestTeleporter(targetCFrame.Position)
+    -- if teleporter then
+    --     requestEntrance(teleporter)
+    -- end
 
     -- Tween Logic
     local dist = (hrp.Position - targetCFrame.Position).Magnitude
@@ -962,6 +962,17 @@ end
 RunService.Heartbeat:Connect(function()
     if _G.Settings.Configs["Fast Attack"] and LocalPlayer.Character then
         FastAttack:AttackNearest()
+    end
+    
+    -- Farm Position Lock (Anti-Gravity / Hover Fix)
+    if _G.FarmPosition and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = LocalPlayer.Character.HumanoidRootPart
+        hrp.CFrame = CFrame.new(_G.FarmPosition.Position) * CFrame.Angles(math.rad(-90), 0, 0) -- Look down
+        hrp.Velocity = Vector3.zero
+        
+        if LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.PlatformStand = true
+        end
     end
 end)
 
@@ -1628,6 +1639,7 @@ task.spawn(function()
                     local hasQuest = questGui and questGui.Visible and (string.find(questGui.Container.QuestTitle.Title.Text, questData.Mob) or string.find(questGui.Container.QuestTitle.Title.Text, "Boss"))
                     
                     if not hasQuest then
+                        _G.FarmPosition = nil -- Stop locking while getting quest
                         -- Abandon wrong quest
                         if questGui and questGui.Visible then
                             ReplicatedStorage.Remotes.CommF_:InvokeServer("AbandonQuest")
@@ -1661,7 +1673,14 @@ task.spawn(function()
                         if enemy and enemy:FindFirstChild("HumanoidRootPart") then
                             -- Teleport to Enemy (Redz Logic: TP2)
                             local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0) -- Hover 30 studs above
-                            TP2(farmPos)
+                            
+                            -- Distance Check for TP vs Lock
+                            if (LocalPlayer.Character.HumanoidRootPart.Position - farmPos.Position).Magnitude > 50 then
+                                _G.FarmPosition = nil -- Stop locking
+                                TP2(farmPos)
+                            else
+                                _G.FarmPosition = farmPos -- Lock position
+                            end
                             
                             -- Magnet / Bring Mob Logic
                             if (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 60 then
@@ -1691,6 +1710,7 @@ task.spawn(function()
                             EnsureHaki()
                             -- FastAttack is handled by the Heartbeat loop
                         else
+                            _G.FarmPosition = nil -- Stop locking if no enemy
                             -- No enemy found: Go to Spawn
                             local spawns = GetMobSpawns(targetName)
                             if #spawns > 0 then
@@ -1705,6 +1725,10 @@ task.spawn(function()
                     end
                 end)
             end
+        end
+        -- Reset Farm Position if disabled
+        if not _G.Settings.Main["Auto Farm Level"] then
+            _G.FarmPosition = nil
         end
     end
 end)
