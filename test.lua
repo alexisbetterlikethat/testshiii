@@ -29,6 +29,7 @@ Window:CreateHomeTab({
 -- Global Settings
 _G.Settings = {
     Main = {
+        ["Auto Kaitun"] = false,
         ["Auto Farm Level"] = false,
         ["Fast Auto Farm Level"] = false,
         ["Distance Mob Aura"] = 1000,
@@ -660,7 +661,6 @@ local function DisableNoclip()
 end
 
 local lastTweenTarget = nil
-local tweenConnection = nil
 
 local function toTarget(targetPos)
     if not targetPos then return end
@@ -691,67 +691,52 @@ local function toTarget(targetPos)
         return
     end
 
-    local Speed = 300
-    if Distance < 250 then Speed = 500 end
+    local Speed = 350
+    if Distance < 250 then Speed = 600 end
     
-    -- Cleanup previous
-    if activeTween then 
-        activeTween:Cancel() 
-        activeTween = nil 
-    end
-    if tweenConnection then
-        tweenConnection:Disconnect()
-        tweenConnection = nil
-    end
-    if Character:FindFirstChild("PartTele") then
-        Character.PartTele:Destroy()
+    if activeTween then
+        activeTween:Cancel()
+        activeTween = nil
     end
 
-    -- PartTele Logic (Redz/Matsune Style)
-    local PartTele = Instance.new("Part", Character)
-    PartTele.Size = Vector3.new(1, 1, 1)
-    PartTele.Name = "PartTele"
-    PartTele.Anchored = true
-    PartTele.Transparency = 1
-    PartTele.CanCollide = false
-    PartTele.CFrame = RootPart.CFrame
-    
-    -- Use RunService for smoother/reliable updates
-    tweenConnection = RunService.Stepped:Connect(function()
-        if Character and Character:FindFirstChild("HumanoidRootPart") and PartTele and PartTele.Parent then
-            Character.HumanoidRootPart.CFrame = PartTele.CFrame
-            Character.HumanoidRootPart.Velocity = Vector3.zero
-            
-            -- Anti-Fall / PlatformStand
-            if Character:FindFirstChild("Humanoid") then
-                Character.Humanoid.PlatformStand = true
+    local PartTele = Character:FindFirstChild("PartTele")
+    if not PartTele then
+        PartTele = Instance.new("Part")
+        PartTele.Name = "PartTele"
+        PartTele.Size = Vector3.new(10, 1, 10)
+        PartTele.Transparency = 1
+        PartTele.CanCollide = false
+        PartTele.Anchored = true
+        PartTele.CFrame = RootPart.CFrame
+        PartTele.Parent = Character
+        PartTele:GetPropertyChangedSignal("CFrame"):Connect(function()
+            local currentChar = LocalPlayer.Character
+            local currentRoot = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+            if currentRoot then
+                currentRoot.CFrame = PartTele.CFrame
+                currentRoot.Velocity = Vector3.zero
             end
-        else
-            if tweenConnection then tweenConnection:Disconnect() end
-        end
-    end)
-    
-    local TweenInfo = TweenInfo.new(Distance / Speed, Enum.EasingStyle.Linear)
-    
-    -- Enable Noclip
+        end)
+    end
+
     EnableNoclip()
-    
+
+    local tweenInfo = TweenInfo.new(Distance / Speed, Enum.EasingStyle.Linear)
     lastTweenTarget = targetCFrame.Position
-    local Tween = TweenService:Create(PartTele, TweenInfo, {CFrame = targetCFrame})
+    local Tween = TweenService:Create(PartTele, tweenInfo, {CFrame = targetCFrame})
     activeTween = Tween
-    
+
     Tween.Completed:Connect(function(status)
-        if status == Enum.PlaybackState.Completed then
-            if activeTween == Tween then
-                activeTween = nil
-                lastTweenTarget = nil
-                if tweenConnection then tweenConnection:Disconnect() tweenConnection = nil end
-                DisableNoclip()
-                if PartTele then PartTele:Destroy() end
+        if status == Enum.PlaybackState.Completed and activeTween == Tween then
+            activeTween = nil
+            lastTweenTarget = nil
+            DisableNoclip()
+            if PartTele and PartTele.Parent then
+                PartTele:Destroy()
             end
         end
     end)
-    
+
     Tween:Play()
     return Tween
 end
@@ -1550,8 +1535,10 @@ task.spawn(function()
                             if (LocalPlayer.Character.HumanoidRootPart.Position - farmPos.Position).Magnitude <= 50 then
                                 -- Close enough: Lock On directly
                                 if activeTween then activeTween:Cancel() activeTween = nil end
-                                if tweenConnection then tweenConnection:Disconnect() tweenConnection = nil end
-                                if LocalPlayer.Character:FindFirstChild("PartTele") then LocalPlayer.Character.PartTele:Destroy() end
+                                if LocalPlayer.Character:FindFirstChild("PartTele") then 
+                                    LocalPlayer.Character.PartTele:Destroy()
+                                    DisableNoclip()
+                                end
                                 
                                 LocalPlayer.Character.HumanoidRootPart.CFrame = farmPos
                                 LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
@@ -1598,6 +1585,102 @@ task.spawn(function()
                     end
                 end)
             end
+        end
+    end
+end)
+
+-- Auto Kaitun (Account Maxing)
+task.spawn(function()
+    while task.wait(1) do
+        if _G.Settings.Main["Auto Kaitun"] then
+            pcall(function()
+                -- 1. Enable Essentials
+                _G.Settings.Main["Auto Farm Level"] = true
+                _G.Settings.Configs["Auto Haki"] = true
+                _G.Settings.Stats["Enabled Auto Stats"] = true
+                _G.Settings.Shop["Auto Legendary Sword"] = true
+                _G.Settings.Fruit["Auto Store Fruits"] = true
+                
+                -- 2. Sea 1 -> Sea 2 Transition
+                if CurrentWorld == 1 and LocalPlayer.Data.Level.Value >= 700 then
+                    _G.Settings.Main["Auto Farm Level"] = false -- Pause farming to do quest
+                    
+                    local map = workspace:FindFirstChild("Map")
+                    local iceDoor = map and map:FindFirstChild("Ice") and map.Ice:FindFirstChild("Door")
+                    
+                    -- Step 1: Talk to Detective
+                    local detectivePos = CFrame.new(4849.3, 5.65, 719.6)
+                    if (LocalPlayer.Character.HumanoidRootPart.Position - detectivePos.Position).Magnitude > 15 then
+                        toTarget(detectivePos)
+                    else
+                        ReplicatedStorage.Remotes.CommF_:InvokeServer("DressrosaQuestProgress", "Detective")
+                        task.wait(0.5)
+                        EquipWeapon("Key")
+                    end
+                    
+                    -- Step 2: Go to Ice Admiral
+                    if iceDoor then
+                        local doorPos = CFrame.new(1347.7, 37.4, -1325.6)
+                        if (LocalPlayer.Character.HumanoidRootPart.Position - doorPos.Position).Magnitude > 15 then
+                            toTarget(doorPos)
+                        else
+                            -- Kill Ice Admiral
+                            local iceAdmiral = workspace.Enemies:FindFirstChild("Ice Admiral")
+                            if iceAdmiral and iceAdmiral.Humanoid.Health > 0 then
+                                toTarget(iceAdmiral.HumanoidRootPart.CFrame * CFrame.new(0, 40, 0))
+                                EquipPreferredWeapon()
+                                PerformBasicAttack()
+                            else
+                                -- Try to travel if he's dead or we are done
+                                ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelDressrosa")
+                            end
+                        end
+                    end
+                end
+
+                -- 3. Sea 2 -> Sea 3 Transition
+                if CurrentWorld == 2 and LocalPlayer.Data.Level.Value >= 1500 then
+                    _G.Settings.Main["Auto Farm Level"] = false -- Pause farming
+                    
+                    local progress = ReplicatedStorage.Remotes.CommF_:InvokeServer("ZQuestProgress", "General")
+                    if progress == 0 then
+                        -- Go to King Red Head
+                        local kingPos = CFrame.new(-1926.3, 12.8, 1738.3)
+                        if (LocalPlayer.Character.HumanoidRootPart.Position - kingPos.Position).Magnitude > 15 then
+                            toTarget(kingPos)
+                        else
+                            ReplicatedStorage.Remotes.CommF_:InvokeServer("ZQuestProgress", "Begin")
+                        end
+                    elseif progress == 1 then
+                        -- Kill Rip Indra
+                        local ripIndra = workspace.Enemies:FindFirstChild("rip_indra")
+                        if ripIndra and ripIndra.Humanoid.Health > 0 then
+                             toTarget(ripIndra.HumanoidRootPart.CFrame * CFrame.new(0, 40, 0))
+                             EquipPreferredWeapon()
+                             PerformBasicAttack()
+                        else
+                            -- If not found, maybe wait at spawn?
+                            local spawnPos = CFrame.new(-26880.9, 22.8, 473.2) -- Rough area
+                            toTarget(spawnPos)
+                        end
+                    else
+                        -- Travel to Zou
+                        ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelZou")
+                    end
+                end
+                
+                -- 4. Buy Essentials (Periodically)
+                if os.clock() % 60 < 2 then -- Run every minute roughly
+                    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyHaki", "Geppo")
+                    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyHaki", "Buso")
+                    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyHaki", "Soru")
+                    
+                    local swords = {"Cutlass", "Katana", "Iron Mace", "Duel Katana", "Triple Katana", "Pipe", "Bisento", "Soul Cane"}
+                    for _, sword in ipairs(swords) do
+                        ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyItem", sword)
+                    end
+                end
+            end)
         end
     end
 end)
@@ -2298,6 +2381,7 @@ end)
 local MainTab = Window:CreateTab({Name = "Main", Icon = GetIcon("Main"), ImageSource = "Custom", ShowTitle = true})
 
 MainTab:CreateSection("Farming")
+MainTab:CreateToggle({Name = "Auto Kaitun (Max Account)", CurrentValue = _G.Settings.Main["Auto Kaitun"], Callback = function(v) _G.Settings.Main["Auto Kaitun"] = v end}, "AutoKaitun")
 MainTab:CreateToggle({Name = "Auto Farm Level", CurrentValue = _G.Settings.Main["Auto Farm Level"], Callback = function(v) _G.Settings.Main["Auto Farm Level"] = v end}, "AutoFarmLevel")
 -- Fast Auto Farm Removed
 MainTab:CreateToggle({Name = "Auto Farm Bone", CurrentValue = _G.Settings.Main["Auto Farm Bone"], Callback = function(v) _G.Settings.Main["Auto Farm Bone"] = v end}, "AutoFarmBone")
