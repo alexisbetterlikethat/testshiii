@@ -847,8 +847,7 @@ function requestEntrance(pos)
     task.wait(0.5)
 end
 
--- TP2 Implementation (Simplified & Stable)
-local tweenActive = false
+-- TP2 Implementation (Pure Tween for Travel & Hover)
 local currentTween = nil
 
 function TP2(target)
@@ -858,17 +857,13 @@ function TP2(target)
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
     local hrp = LocalPlayer.Character.HumanoidRootPart
     
-    -- Calculate Distance
-    local dist = (hrp.Position - targetCFrame.Position).Magnitude
-    
-    -- Instant TP if very close (and stop tweening)
-    if dist < 50 then
-        if currentTween then currentTween:Cancel() end
-        tweenActive = false
-        
-        hrp.CFrame = targetCFrame
-        hrp.Velocity = Vector3.zero
-        return
+    -- Check Teleporters (Only for long distances)
+    if (hrp.Position - targetCFrame.Position).Magnitude > 500 then
+        local teleporter = CheckNearestTeleporter(targetCFrame.Position)
+        if teleporter then
+            requestEntrance(teleporter)
+            return -- Wait for teleport
+        end
     end
 
     -- Create PartTele if needed
@@ -881,7 +876,7 @@ function TP2(target)
         p.CanCollide = false
         p.CFrame = hrp.CFrame
         
-        -- Sync HRP to PartTele
+        -- Sync HRP to PartTele (Tween Lock)
         p:GetPropertyChangedSignal("CFrame"):Connect(function()
             if not p or not p.Parent then return end
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -896,33 +891,23 @@ function TP2(target)
     end
     
     local p = LocalPlayer.Character.PartTele
+    local dist = (p.Position - targetCFrame.Position).Magnitude
     
-    -- Only start new tween if not already moving to this target
-    if tweenActive and (p.CFrame.Position - targetCFrame.Position).Magnitude < 10 then
-        return
-    end
-    
-    tweenActive = true
-    p.CFrame = hrp.CFrame -- Start from current
-    
+    -- Speed Calculation
     local speed = 350
-    if dist <= 300 then speed = 1000 end
+    if dist > 500 then speed = 500 end
     
-    local info = TweenInfo.new(dist / speed, Enum.EasingStyle.Linear)
-    currentTween = TweenService:Create(p, info, {CFrame = targetCFrame})
-    currentTween:Play()
+    -- Minimum tween time for smoothness
+    local tweenTime = dist / speed
+    if tweenTime < 0.05 then tweenTime = 0.05 end
     
-    currentTween.Completed:Connect(function(state)
-        if state == Enum.PlaybackState.Completed then
-            tweenActive = false
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
-                LocalPlayer.Character.PartTele:Destroy()
-            end
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                LocalPlayer.Character.Humanoid.PlatformStand = false
-            end
-        end
-    end)
+    -- Only start new tween if target changed significantly
+    if (p.CFrame.Position - targetCFrame.Position).Magnitude > 1 then
+        if currentTween then currentTween:Cancel() end
+        local info = TweenInfo.new(tweenTime, Enum.EasingStyle.Linear)
+        currentTween = TweenService:Create(p, info, {CFrame = targetCFrame})
+        currentTween:Play()
+    end
 end
 
 -- Fast Attack (Optimized)
@@ -1671,24 +1656,9 @@ task.spawn(function()
                             -- Teleport to Enemy (Redz Logic: TP2)
                             local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0) -- Hover 30 studs above
                             
-                            -- Distance Check for TP vs Lock
-                            if (LocalPlayer.Character.HumanoidRootPart.Position - farmPos.Position).Magnitude > 50 then
-                                -- Far away: Use TP2
-                                if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
-                                TP2(farmPos)
-                            else
-                                -- Close enough: Lock On directly (Anchor)
-                                if LocalPlayer.Character:FindFirstChild("PartTele") then LocalPlayer.Character.PartTele:Destroy() end
-                                
-                                local hrp = LocalPlayer.Character.HumanoidRootPart
-                                hrp.CFrame = farmPos * CFrame.Angles(math.rad(-90), 0, 0)
-                                hrp.Velocity = Vector3.zero
-                                hrp.Anchored = true
-                                
-                                if LocalPlayer.Character:FindFirstChild("Humanoid") then
-                                    LocalPlayer.Character.Humanoid.PlatformStand = true
-                                end
-                            end
+                            -- Always use TP2 for movement and hovering (Pure Tween)
+                            if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
+                            TP2(farmPos)
                             
                             -- Magnet / Bring Mob Logic
                             if (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 60 then
@@ -1746,7 +1716,6 @@ task.spawn(function()
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                 LocalPlayer.Character.HumanoidRootPart.Anchored = false
             end
-            tweenActive = false
             if currentTween then currentTween:Cancel() end
             currentTween = nil
         end
