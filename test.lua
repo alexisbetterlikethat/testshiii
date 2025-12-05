@@ -847,43 +847,27 @@ function requestEntrance(pos)
     task.wait(0.5)
 end
 
--- TP2 Implementation (Redz Logic)
-local tweenActive = false
-local tweenId = 0
-local lastTweenTarget = nil
-
+-- TP2 Implementation (Redz Logic - Persistent PartTele)
 function TP2(target)
     local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target) or nil
     if not targetCFrame then return end
     
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
-    
     local hrp = LocalPlayer.Character.HumanoidRootPart
     
     -- Check Teleporters
-    -- local teleporter = CheckNearestTeleporter(targetCFrame.Position)
-    -- if teleporter then
-    --     requestEntrance(teleporter)
-    -- end
-
-    -- Tween Logic
-    local dist = (hrp.Position - targetCFrame.Position).Magnitude
-    
-    -- Instant TP if close
-    if dist < 50 then
-        hrp.CFrame = targetCFrame
-        hrp.Velocity = Vector3.zero
-        return
+    local teleporter = CheckNearestTeleporter(targetCFrame.Position)
+    if teleporter then
+        requestEntrance(teleporter)
+        return -- Wait for teleport
     end
 
-    -- Tween
+    -- Calculate Distance & Speed
+    local dist = (hrp.Position - targetCFrame.Position).Magnitude
     local speed = 350
     if dist <= 300 then speed = 1000 end -- Faster for short distances
     
-    local info = TweenInfo.new(dist / speed, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(hrp, info, {CFrame = targetCFrame})
-    
-    -- Bypass Anti-Cheat / Noclip
+    -- Create or Get PartTele
     if not LocalPlayer.Character:FindFirstChild("PartTele") then
         local p = Instance.new("Part", LocalPlayer.Character)
         p.Name = "PartTele"
@@ -893,28 +877,36 @@ function TP2(target)
         p.CanCollide = false
         p.CFrame = hrp.CFrame
         
-        -- Sync HRP to PartTele
-        local conn
-        conn = RunService.Stepped:Connect(function()
-            if not p or not p.Parent then conn:Disconnect() return end
+        -- Sync HRP to PartTele (The Redz "Lock" Mechanism)
+        p:GetPropertyChangedSignal("CFrame"):Connect(function()
+            if not p or not p.Parent then return end
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                 LocalPlayer.Character.HumanoidRootPart.CFrame = p.CFrame
                 LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
+                
                 if LocalPlayer.Character:FindFirstChild("Humanoid") then
-                    LocalPlayer.Character.Humanoid:ChangeState(11) -- PlatformStand
+                    LocalPlayer.Character.Humanoid.PlatformStand = true
                 end
             end
         end)
-        
-        local t = TweenService:Create(p, info, {CFrame = targetCFrame})
-        t:Play()
-        t.Completed:Connect(function()
-            p:Destroy()
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                LocalPlayer.Character.Humanoid:ChangeState(18) -- FallingDown (Reset)
-            end
-        end)
     end
+    
+    local p = LocalPlayer.Character.PartTele
+    local info = TweenInfo.new(dist / speed, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(p, info, {CFrame = targetCFrame})
+    tween:Play()
+    
+    -- Only destroy if completed (not cancelled/overridden)
+    tween.Completed:Connect(function(state)
+        if state == Enum.PlaybackState.Completed then
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
+                LocalPlayer.Character.PartTele:Destroy()
+            end
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                LocalPlayer.Character.Humanoid.PlatformStand = false
+            end
+        end
+    end)
 end
 
 -- Fast Attack (Optimized)
@@ -962,30 +954,6 @@ end
 RunService.Heartbeat:Connect(function()
     if _G.Settings.Configs["Fast Attack"] and LocalPlayer.Character then
         FastAttack:AttackNearest()
-    end
-    
-    -- Farm Position Lock (Anchor Method for Smoothness)
-    if _G.FarmPosition and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local hrp = LocalPlayer.Character.HumanoidRootPart
-        
-        -- Smoothly interpolate to the target position if we are close
-        if (hrp.Position - _G.FarmPosition.Position).Magnitude < 5 then
-            hrp.Anchored = true
-            hrp.CFrame = hrp.CFrame:Lerp(_G.FarmPosition * CFrame.Angles(math.rad(-90), 0, 0), 0.5)
-        else
-            hrp.Anchored = false
-            hrp.CFrame = _G.FarmPosition * CFrame.Angles(math.rad(-90), 0, 0)
-            hrp.Velocity = Vector3.zero
-        end
-        
-        if LocalPlayer.Character:FindFirstChild("Humanoid") then
-            LocalPlayer.Character.Humanoid.PlatformStand = true
-        end
-    else
-        -- Unanchor if not farming/locking
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Anchored then
-             LocalPlayer.Character.HumanoidRootPart.Anchored = false
-        end
     end
 end)
 
@@ -1652,8 +1620,6 @@ task.spawn(function()
                     local hasQuest = questGui and questGui.Visible and (string.find(questGui.Container.QuestTitle.Title.Text, questData.Mob) or string.find(questGui.Container.QuestTitle.Title.Text, "Boss"))
                     
                     if not hasQuest then
-                        _G.FarmPosition = nil -- Stop locking while getting quest
-                        if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
                         -- Abandon wrong quest
                         if questGui and questGui.Visible then
                             ReplicatedStorage.Remotes.CommF_:InvokeServer("AbandonQuest")
@@ -1688,14 +1654,8 @@ task.spawn(function()
                             -- Teleport to Enemy (Redz Logic: TP2)
                             local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0) -- Hover 30 studs above
                             
-                            -- Distance Check for TP vs Lock
-                            if (LocalPlayer.Character.HumanoidRootPart.Position - farmPos.Position).Magnitude > 50 then
-                                _G.FarmPosition = nil -- Stop locking
-                                if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
-                                TP2(farmPos)
-                            else
-                                _G.FarmPosition = farmPos -- Lock position
-                            end
+                            -- Always use TP2 for movement and locking
+                            TP2(farmPos)
                             
                             -- Magnet / Bring Mob Logic
                             if (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 60 then
@@ -1725,8 +1685,6 @@ task.spawn(function()
                             EnsureHaki()
                             -- FastAttack is handled by the Heartbeat loop
                         else
-                            _G.FarmPosition = nil -- Stop locking if no enemy
-                            if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
                             -- No enemy found: Go to Spawn
                             local spawns = GetMobSpawns(targetName)
                             if #spawns > 0 then
@@ -1744,9 +1702,11 @@ task.spawn(function()
         end
         -- Reset Farm Position if disabled
         if not _G.Settings.Main["Auto Farm Level"] then
-            _G.FarmPosition = nil
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Anchored then
-                 LocalPlayer.Character.HumanoidRootPart.Anchored = false
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
+                LocalPlayer.Character.PartTele:Destroy()
+            end
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                LocalPlayer.Character.Humanoid.PlatformStand = false
             end
         end
     end
