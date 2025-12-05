@@ -1453,39 +1453,41 @@ local function BringMob(target)
     end
 end
 
-local function GetMobSpawnPosition(mobName)
-    -- Helper to clean name
+local function GetMobSpawns(mobName)
+    local spawns = {}
     local function clean(str)
         return str:gsub("Lv%.", ""):gsub("[%[%]]", ""):gsub("%d+", ""):gsub("%s+", "")
     end
-
     local targetClean = clean(mobName)
 
     -- 1. Check our generated EnemySpawns folder
     if workspace:FindFirstChild("EnemySpawns") then
         for _, spawnPoint in ipairs(workspace.EnemySpawns:GetChildren()) do
             if spawnPoint:IsA("BasePart") then
-                if spawnPoint.Name == targetClean or spawnPoint.Name == mobName or string.find(spawnPoint.Name, targetClean) then
-                    return spawnPoint.CFrame
+                local name = clean(spawnPoint.Name)
+                if name == targetClean or spawnPoint.Name == mobName or string.find(spawnPoint.Name, targetClean) then
+                    table.insert(spawns, spawnPoint.CFrame)
                 end
             end
         end
     end
 
     -- 2. Fallback: Check _WorldOrigin directly
-    if workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("EnemySpawns") then
+    if #spawns == 0 and workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("EnemySpawns") then
         for _, spawnPoint in pairs(workspace._WorldOrigin.EnemySpawns:GetChildren()) do
             if spawnPoint:IsA("BasePart") then
                 local name = clean(spawnPoint.Name)
                 if name == targetClean or string.find(name, targetClean) then
-                    return spawnPoint.CFrame
+                    table.insert(spawns, spawnPoint.CFrame)
                 end
             end
         end
     end
 
-    return nil
+    return spawns
 end
+
+local spawnIndex = 1
 
 -- Auto Farm Level (Redz Logic - Re-implemented)
 task.spawn(function()
@@ -1572,10 +1574,17 @@ task.spawn(function()
                                 end
                             end
                         else
-                            -- Mob not found: Go to Spawn Point
-                            local spawnPos = GetMobSpawnPosition(questData.Mob)
-                            if spawnPos then
-                                toTarget(spawnPos * CFrame.new(0, 50, 0))
+                            -- Mob not found: Cycle Spawn Points (Redz Logic)
+                            local spawns = GetMobSpawns(questData.Mob)
+                            if #spawns > 0 then
+                                if spawnIndex > #spawns then spawnIndex = 1 end
+                                local targetSpawn = spawns[spawnIndex]
+                                
+                                toTarget(targetSpawn * CFrame.new(0, 50, 0))
+                                
+                                if (LocalPlayer.Character.HumanoidRootPart.Position - targetSpawn.Position).Magnitude < 20 then
+                                    spawnIndex = spawnIndex + 1
+                                end
                             else
                                 warn("Aero Hub: Could not find spawn for " .. tostring(questData.Mob))
                                 -- Fallback: Hover at Quest Giver (only if spawn not found)
