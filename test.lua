@@ -866,21 +866,38 @@ function FastAttack:AttackNearest()
 
     local enemiesToHit = {}
     local baseEnemy = nil
+    local closestDist = math.huge
 
     if workspace:FindFirstChild("Enemies") then
         for _, enemy in pairs(workspace.Enemies:GetChildren()) do
             if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
-                if (enemy.HumanoidRootPart.Position - myRoot.Position).Magnitude <= self.Distance then
-                    table.insert(enemiesToHit, {enemy, enemy.HumanoidRootPart})
-                    baseEnemy = enemy.HumanoidRootPart
+                local dist = (enemy.HumanoidRootPart.Position - myRoot.Position).Magnitude
+                if dist <= self.Distance then
+                    -- Prefer Head for hit registration if available, otherwise RootPart
+                    local hitPart = enemy:FindFirstChild("Head") or enemy.HumanoidRootPart
+                    table.insert(enemiesToHit, {enemy, hitPart})
+                    
+                    if dist < closestDist then
+                        closestDist = dist
+                        baseEnemy = hitPart
+                    end
                 end
             end
         end
     end
 
     if #enemiesToHit > 0 and baseEnemy then
+        -- 1. Register Attack (Cooldown 0 for max speed)
         RegisterAttack:FireServer(0)
+        
+        -- 2. Register Hit (All enemies)
         RegisterHit:FireServer(baseEnemy, enemiesToHit)
+        
+        -- 3. Tool Click (Extra damage / Animation / Skill Trigger)
+        local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+        if tool and tool:FindFirstChild("LeftClickRemote") then
+            tool.LeftClickRemote:FireServer()
+        end
     end
 end
 
