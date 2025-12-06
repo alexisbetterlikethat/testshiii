@@ -771,9 +771,7 @@ RunService.Heartbeat:Connect(function(dt)
         local targetPos = _G.TargetCFrame.Position
         local currentPos = hrp.Position
         local dist = (targetPos - currentPos).Magnitude
-        local speed = 250
-        
-        if dist > 500 then speed = 350 end
+        local speed = 250 -- Constant speed for consistency
         
         if dist < 5 then
             -- Lock Position (Hover)
@@ -1626,11 +1624,12 @@ task.spawn(function()
                             _G.Settings.Configs["Fast Attack"] = true
 
                             -- Smart Positioning: World Space + Ceiling Check
-                            local targetPos = enemy.HumanoidRootPart.Position + Vector3.new(0, 12, 0)
+                            -- Lowered to 7 studs to ensure hits connect
+                            local targetPos = enemy.HumanoidRootPart.Position + Vector3.new(0, 7, 0)
                             
                             -- Raycast to check for ceilings/walls above enemy
                             local rayOrigin = enemy.HumanoidRootPart.Position
-                            local rayDirection = Vector3.new(0, 15, 0)
+                            local rayDirection = Vector3.new(0, 10, 0)
                             local rayParams = RaycastParams.new()
                             rayParams.FilterDescendantsInstances = {LocalPlayer.Character, workspace.Enemies, workspace:FindFirstChild("EnemySpawns")}
                             rayParams.FilterType = Enum.RaycastFilterType.Exclude
