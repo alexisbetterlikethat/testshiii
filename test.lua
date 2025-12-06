@@ -841,7 +841,7 @@ end
 
 -- Fast Attack (Optimized)
 FastAttack = {
-    Distance = 100, -- Increased range for higher hover
+    Distance = 150, -- Increased range to ensure hits
     Enabled = false
 }
 
@@ -849,9 +849,22 @@ local RegisterAttack
 local RegisterHit
 
 task.spawn(function()
-    local Net = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net")
-    RegisterAttack = Net:WaitForChild("RE/RegisterAttack")
-    RegisterHit = Net:WaitForChild("RE/RegisterHit")
+    -- Robust Remote Finder
+    local Net = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("Net")
+    if not Net then
+        -- Fallback search
+        for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+            if v.Name == "Net" and v:IsA("Folder") then
+                Net = v
+                break
+            end
+        end
+    end
+    
+    if Net then
+        RegisterAttack = Net:WaitForChild("RE/RegisterAttack", 5)
+        RegisterHit = Net:WaitForChild("RE/RegisterHit", 5)
+    end
 end)
 
 function FastAttack:AttackNearest()
@@ -1621,9 +1634,9 @@ task.spawn(function()
                                 LocalPlayer.Character.HumanoidRootPart.Anchored = true
                                 LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
                                 
-                                -- Calculate Lock Position (25 studs below player)
+                                -- Calculate Lock Position (12 studs below player - Close Range)
                                 local targetCFrame = _G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame
-                                local lockPos = targetCFrame * CFrame.new(0, -25, 0)
+                                local lockPos = targetCFrame * CFrame.new(0, -12, 0)
                                 
                                 -- Anchor & Bring Main Enemy
                                 pcall(function()
@@ -1655,14 +1668,16 @@ task.spawn(function()
                                 if LocalPlayer.Character.HumanoidRootPart.Anchored then
                                     LocalPlayer.Character.HumanoidRootPart.Anchored = false
                                 end
-                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 25, 0)
+                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 12, 0)
                                 TP2(farmPos)
                             end
                             
-                            -- Attack
+                            -- Attack (Force Trigger)
                             EquipPreferredWeapon()
                             EnsureHaki()
-                            -- FastAttack is handled by the Heartbeat loop
+                            
+                            -- 1. Fast Attack Call
+                            FastAttack:AttackNearest()
                         else
                             -- No enemy found: Go to Spawn
                             if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
