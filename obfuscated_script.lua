@@ -757,99 +757,65 @@ function requestEntrance(pos)
     task.wait(0.5)
 end
 
--- [[ TP2 Implementation from RedzHub ]]
-local tweenActive = false
-local tweenid = 0
-local lastTweenTarget = nil
-local tweenPause = false
--- local Util = require(ReplicatedStorage.Util) -- Removed dependency
+-- [[ Standard Tween Implementation (TweenX) ]]
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
-function TP2(target)
-    local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target) or nil
+local _tween = nil
+local _noclip = nil
+
+function TweenX(target)
+    if not LocalPlayer.Character then return end
+    local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target)
     if not targetCFrame then return end
+
+    -- Cancel existing tween
+    if _tween then
+        _tween:Cancel()
+        _tween = nil
+    end
+
+    -- Noclip Loop (Only active during tween)
+    if not _noclip then
+        _noclip = RunService.Stepped:Connect(function()
+            if _tween and _tween.PlaybackState == Enum.PlaybackState.Playing and LocalPlayer.Character then
+                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+                -- Anti-Sit
+                local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+                if hum and hum.Sit then hum.Sit = false end
+            elseif not _tween and _noclip then
+                _noclip:Disconnect()
+                _noclip = nil
+            end
+        end)
+    end
+
+    local distance = (root.Position - targetCFrame.Position).Magnitude
+    local speed = 350 -- Studs per second
+    local time = distance / speed
     
-    if LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        if not tweenPause then
-            local currentTweenId = nil
-            local success, err = pcall(function()
-                local nearestTeleporter = CheckNearestTeleporter(targetCFrame)
-                if nearestTeleporter then
-                    RequestEntrance(nearestTeleporter)
-                end
-                
-                if not tweenActive or (not lastTweenTarget or dist(targetCFrame, lastTweenTarget) >= 10 and dist(lastTweenTarget) < 10) then
-                    tweenid = (tweenid or 0) + 1
-                    lastTweenTarget = targetCFrame
-                    currentTweenId = tweenid
-                    
-                    -- Removed Util.FPSTracker check
-                    
-                    task.spawn(pcall, function()
-                        local lastPos = {tick(), targetCFrame}
-                        local currentDist = dist(LocalPlayer.Character.HumanoidRootPart.Position, targetCFrame, true)
-                        local startDist = currentDist
-                        
-                        LocalPlayer.Character.Humanoid:SetStateEnabled(13, false) -- Disable Physics
-                        
-                        -- Initial Position Adjustment
-                        if currentDist > 60 then
-                            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(LocalPlayer.Character.HumanoidRootPart.Position.X, LocalPlayer.Character.HumanoidRootPart.Position.Y + 200, LocalPlayer.Character.HumanoidRootPart.Position.Z)
-                        else
-                            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(targetCFrame.Position.X, targetCFrame.Position.Y, targetCFrame.Position.Z)
-                        end
-                        
-                        while LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and (75 < currentDist and (currentTweenId == tweenid and LocalPlayer.Character.Humanoid.Health > 0)) do
-                            local fps = workspace:GetRealPhysicsFPS()
-                            if fps < 1 then fps = 60 end
-                            local fpsMultiplier = 58 / math.clamp(fps, 1, 999)
-                            local speed = 5.5 * fpsMultiplier -- Speed Factor
-                            
-                            local currentPos = LocalPlayer.Character.HumanoidRootPart.Position
-                            local diff = Vector3.new(targetCFrame.X, 0, targetCFrame.Z) - Vector3.new(currentPos.X, 0, currentPos.Z)
-                            
-                            local moveX = (diff.X < 0 and -1 or 1) * speed
-                            local moveZ = (diff.Z < 0 and -1 or 1) * speed
-                            
-                            if math.abs(diff.X) < moveX then moveX = diff.X or moveX end
-                            if math.abs(diff.Z) < moveZ then moveZ = diff.Z or moveZ end
-                            
-                            -- Distance Check Loop
-                            task.spawn(function()
-                                currentDist = dist(LocalPlayer.Character.HumanoidRootPart.Position, targetCFrame, true)
-                                if currentDist > startDist + 10 then
-                                    tweenid = -1
-                                    tweenPause = false
-                                    LocalPlayer.Character.HumanoidRootPart.Anchored = true
-                                    task.wait()
-                                    tweenPause = false
-                                    LocalPlayer.Character.HumanoidRootPart.Anchored = false
-                                end
-                                startDist = currentDist
-                            end)
-                            
-                            -- Move Character
-                            local hrp = LocalPlayer.Character.HumanoidRootPart
-                            local newCFrame = hrp.CFrame + Vector3.new(moveX, 0, moveZ)
-                            hrp.CFrame = newCFrame
-                            
-                            tweenActive = true
-                            task.wait()
-                        end
-                        
-                        LocalPlayer.Character.Humanoid:SetStateEnabled(13, true)
-                        tweenActive = false
-                        
-                        if currentDist <= 100 and currentTweenId == tweenid then
-                            LocalPlayer.Character.HumanoidRootPart.CFrame = targetCFrame
-                        end
-                    end)
-                end
-            end)
-            if not success then warn("TP2 Error:", err) end
-            return currentTweenId
-        end
+    local info = TweenInfo.new(time, Enum.EasingStyle.Linear)
+    
+    _tween = TweenService:Create(root, info, {CFrame = targetCFrame})
+    _tween:Play()
+    
+    -- Optional: Teleport if very close to avoid slow tween start
+    if distance < 50 then
+        root.CFrame = targetCFrame
+        _tween:Cancel()
+        _tween = nil
     end
 end
+
+-- Alias for compatibility
+local TP2 = TweenX
 
 -- Fast Attack (Optimized)
 FastAttack = {
@@ -2657,7 +2623,7 @@ MainTab:CreateSection("Looting")
 MainTab:CreateToggle({Name = "Auto Farm Chest", CurrentValue = _G.Settings.Main["Auto Farm Chest"], Callback = function(v)
     _G.Settings.Main["Auto Farm Chest"] = v
 end}, "AutoFarmChest")
-MainTab:CreateToggle({Name = "Chest Bypass Pulse", CurrentValue = _G.Settings.Main["Chest Bypass"], Callback = function(v)
+MainTab:CreateToggle({Name = "Chest Tp ", CurrentValue = _G.Settings.Main["Chest Bypass"], Callback = function(v)
     _G.Settings.Main["Chest Bypass"] = v
 end}, "ChestBypass")
 MainTab:CreateToggle({Name = "Hop When No more chests", CurrentValue = _G.Settings.Main["Chest Hop When Dry"], Callback = function(v)
@@ -2725,8 +2691,22 @@ FruitTab:CreateToggle({Name = "Tween To Nearest Fruit", CurrentValue = _G.Settin
     if v then _G.Settings.Fruit["Bring To Fruit"] = false end
 end}, "TweenFruit")
 
--- Materials Tab Removed
--- Bones Tab Removed
+local MaterialsTab = Window:CreateTab({Name = "Materials", Icon = GetIcon("Materials"), ImageSource = "Custom", ShowTitle = true})
+MaterialsTab:CreateSection("Material Farming")
+MaterialsTab:CreateToggle({Name = "Auto Farm Material", CurrentValue = _G.Settings.Materials["Auto Farm Material"], Callback = function(v) _G.Settings.Materials["Auto Farm Material"] = v end}, "AutoFarmMaterial")
+MaterialsTab:CreateDropdown({
+    Name = "Select Material",
+    Options = MaterialOptions,
+    CurrentOption = {_G.Settings.Materials["Select Material"]},
+    Callback = function(v)
+        _G.Settings.Materials["Select Material"] = unwrapOption(v)
+    end
+}, "SelectMaterial")
+
+local BonesTab = Window:CreateTab({Name = "Bones", Icon = GetIcon("Bones"), ImageSource = "Custom", ShowTitle = true})
+BonesTab:CreateSection("Haunted Castle")
+BonesTab:CreateToggle({Name = "Auto Farm Bone", CurrentValue = _G.Settings.Main["Auto Farm Bone"], Callback = function(v) _G.Settings.Main["Auto Farm Bone"] = v end}, "AutoFarmBone")
+BonesTab:CreateToggle({Name = "Auto Random Bone Surprise", CurrentValue = _G.Settings.Bones["Auto Random Bone"], Callback = function(v) _G.Settings.Bones["Auto Random Bone"] = v end}, "AutoRandomBone")
 
 local RaidTab = Window:CreateTab({Name = "Raid", Icon = GetIcon("Raid"), ImageSource = "Custom", ShowTitle = true})
 RaidTab:CreateToggle({Name = "Auto Start Raid", CurrentValue = _G.Settings.Raid["Auto Start Raid"], Callback = function(v) _G.Settings.Raid["Auto Start Raid"] = v end}, "AutoStartRaid")
@@ -2777,12 +2757,14 @@ elseif World2 then
     BossList = {"Diamond", "Jeremy", "Fajita", "Don Swan", "Smoke Admiral", "Cursed Captain", "Darkbeard", "Order", "Awakened Ice Admiral", "Tide Keeper"}
 elseif World3 then
     BossList = {"Stone", "Island Empress", "Kilo Admiral", "Captain Elephant", "Beautiful Pirate", "rip_indra True Form", "Longma", "Soul Reaper", "Cake Queen", "Cake Prince", "Dough King"}
+else
+    BossList = {"None"}
 end
 
 BossTab:CreateDropdown({
     Name = "Select Boss",
     Options = BossList,
-    CurrentOption = {""},
+    CurrentOption = {BossList[1] or "None"},
     Callback = function(v)
         _G.SelectBoss = unwrapOption(v)
     end
@@ -2832,6 +2814,8 @@ elseif World3 then
         "Floating Turtle", "Haunted Castle", "Ice Cream Island", "Peanut Island", "Cake Island", 
         "Room Enma/Yama & Secret Temple", "Room Tushita", "Tiki Outpost", "Dragon Gojo"
     }
+else
+    IslandList = {"None"}
 end
 
 TravelTab:CreateDropdown({
