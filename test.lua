@@ -882,7 +882,8 @@ function FastAttack:AttackNearest()
         for _, enemy in pairs(workspace.Enemies:GetChildren()) do
             if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
                 local dist = (enemy.HumanoidRootPart.Position - myRoot.Position).Magnitude
-                if dist <= self.Distance then
+                -- Increased distance check to 60 to ensure hits connect even if slightly offset
+                if dist <= 60 then
                     -- Prefer Head for hit registration if available, otherwise RootPart
                     local hitPart = enemy:FindFirstChild("Head") or enemy.HumanoidRootPart
                     table.insert(enemiesToHit, {enemy, hitPart})
@@ -2494,7 +2495,7 @@ MainTab:CreateSection("Farming")
 MainTab:CreateToggle({Name = "Auto Kaitun (Max Account)", CurrentValue = _G.Settings.Main["Auto Kaitun"], Callback = function(v) _G.Settings.Main["Auto Kaitun"] = v end}, "AutoKaitun")
 MainTab:CreateToggle({Name = "Auto Farm Level", CurrentValue = _G.Settings.Main["Auto Farm Level"], Callback = function(v) _G.Settings.Main["Auto Farm Level"] = v end}, "AutoFarmLevel")
 -- Fast Auto Farm Removed
-MainTab:CreateToggle({Name = "Auto Farm Bone", CurrentValue = _G.Settings.Main["Auto Farm Bone"], Callback = function(v) _G.Settings.Main["Auto Farm Bone"] = v end}, "AutoFarmBone")
+-- Auto Farm Bone Removed
 MainTab:CreateToggle({Name = "Auto Elite Hunter", CurrentValue = _G.Settings.Main["Auto Elite Hunter"], Callback = function(v) _G.Settings.Main["Auto Elite Hunter"] = v end}, "AutoEliteHunter")
 
 MainTab:CreateSection("Mastery Control")
@@ -2605,8 +2606,7 @@ MaterialsTab:CreateDropdown({
     end
 }, "SelectMaterial")
 
-local BonesTab = Window:CreateTab({Name = "Bones", Icon = GetIcon("Bones"), ImageSource = "Custom", ShowTitle = true})
-BonesTab:CreateToggle({Name = "Auto Random Bone", CurrentValue = _G.Settings.Bones["Auto Random Bone"], Callback = function(v) _G.Settings.Bones["Auto Random Bone"] = v end}, "AutoRandomBone")
+-- Bones Tab Removed
 
 local RaidTab = Window:CreateTab({Name = "Raid", Icon = GetIcon("Raid"), ImageSource = "Custom", ShowTitle = true})
 RaidTab:CreateToggle({Name = "Auto Start Raid", CurrentValue = _G.Settings.Raid["Auto Start Raid"], Callback = function(v) _G.Settings.Raid["Auto Start Raid"] = v end}, "AutoStartRaid")
