@@ -1610,6 +1610,11 @@ task.spawn(function()
                         end
                         
                         if enemy and enemy:FindFirstChild("HumanoidRootPart") then
+                            -- Network Ownership (Ensure mobs move)
+                            pcall(function()
+                                sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
+                            end)
+
                             local dist = (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
                             
                             if dist < 80 then -- Increased magnet activation distance
@@ -1623,23 +1628,27 @@ task.spawn(function()
                                 -- Lock enemy relative to OUR TARGET, not our physical body (prevents jitter)
                                 -- Use World Space Y offset to ensure "down" is always "down" regardless of rotation
                                 local targetPos = (_G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame).Position
-                                local lockPos = CFrame.new(targetPos - Vector3.new(0, 70, 0))
+                                local lockPos = CFrame.new(targetPos - Vector3.new(0, 100, 0)) -- Increased to 100 studs
                                 
-                                enemy.HumanoidRootPart.CFrame = lockPos
-                                enemy.HumanoidRootPart.CanCollide = false
-                                enemy.Humanoid.WalkSpeed = 0
-                                enemy.Humanoid.JumpPower = 0
-                                if enemy.Humanoid:FindFirstChild("Animator") then enemy.Humanoid.Animator:Destroy() end
-                                enemy.Humanoid:ChangeState(11) -- PlatformStand
+                                pcall(function()
+                                    enemy.HumanoidRootPart.CFrame = lockPos
+                                    enemy.HumanoidRootPart.CanCollide = false
+                                    enemy.Humanoid.WalkSpeed = 0
+                                    enemy.Humanoid.JumpPower = 0
+                                    if enemy.Humanoid:FindFirstChild("Animator") then enemy.Humanoid.Animator:Destroy() end
+                                    enemy.Humanoid:ChangeState(11) -- PlatformStand
+                                end)
                                 
                                 -- Bring other nearby mobs
                                 for _, other in pairs(workspace.Enemies:GetChildren()) do
                                     if other.Name == targetName and other ~= enemy and other:FindFirstChild("HumanoidRootPart") and other:FindFirstChild("Humanoid") and other.Humanoid.Health > 0 then
                                         if (other.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 300 then
-                                            other.HumanoidRootPart.CFrame = lockPos
-                                            other.HumanoidRootPart.CanCollide = false
-                                            other.Humanoid.WalkSpeed = 0
-                                            other.Humanoid:ChangeState(11)
+                                            pcall(function()
+                                                other.HumanoidRootPart.CFrame = lockPos
+                                                other.HumanoidRootPart.CanCollide = false
+                                                other.Humanoid.WalkSpeed = 0
+                                                other.Humanoid:ChangeState(11)
+                                            end)
                                         end
                                     end
                                 end
@@ -1647,7 +1656,7 @@ task.spawn(function()
                                 -- Approach Mode: Go to Enemy
                                 -- Use World Space Y offset to ensure we are truly ABOVE the enemy
                                 local enemyPos = enemy.HumanoidRootPart.Position
-                                local farmPos = CFrame.new(enemyPos + Vector3.new(0, 70, 0))
+                                local farmPos = CFrame.new(enemyPos + Vector3.new(0, 100, 0)) -- Increased to 100 studs
                                 TP2(farmPos)
                             end
                             
