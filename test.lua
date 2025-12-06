@@ -1622,9 +1622,9 @@ task.spawn(function()
                                 LocalPlayer.Character.HumanoidRootPart.Anchored = true
                                 LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
                                 
-                                -- Calculate Lock Position (60 studs below player)
+                                -- Calculate Lock Position (50 studs below player)
                                 local targetCFrame = _G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame
-                                local lockPos = targetCFrame * CFrame.new(0, -60, 0)
+                                local lockPos = targetCFrame * CFrame.new(0, -50, 0)
                                 
                                 -- Anchor & Bring Main Enemy
                                 pcall(function()
@@ -1654,7 +1654,7 @@ task.spawn(function()
                             else
                                 -- APPROACH MODE: Chase
                                 LocalPlayer.Character.HumanoidRootPart.Anchored = false
-                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 60, 0)
+                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 50, 0)
                                 TP2(farmPos)
                             end
                             
