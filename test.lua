@@ -1669,6 +1669,14 @@ task.spawn(function()
                             -- Look at Enemy
                             local farmPos = CFrame.new(targetPos, enemy.HumanoidRootPart.Position)
                             TP2(farmPos)
+
+                            -- Lock Target Enemy (Prevent moving into walls)
+                            pcall(function()
+                                if enemy.Humanoid.WalkSpeed > 0 then enemy.Humanoid.WalkSpeed = 0 end
+                                if enemy.HumanoidRootPart.CanCollide then enemy.HumanoidRootPart.CanCollide = false end
+                                enemy.HumanoidRootPart.Velocity = Vector3.zero
+                                enemy.HumanoidRootPart.Anchored = true
+                            end)
                             
                             -- Bring Mobs (Optional: Keeps them close for efficiency)
                             -- Only bring them if we are close enough to the main target
@@ -1681,6 +1689,7 @@ task.spawn(function()
                                                 other.HumanoidRootPart.CFrame = enemy.HumanoidRootPart.CFrame
                                                 other.HumanoidRootPart.CanCollide = false
                                                 other.Humanoid.WalkSpeed = 0
+                                                other.HumanoidRootPart.Anchored = true
                                                 other.Humanoid:ChangeState(11)
                                             end)
                                         end
