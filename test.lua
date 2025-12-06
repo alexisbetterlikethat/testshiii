@@ -1588,14 +1588,13 @@ task.spawn(function()
                         end
                         
                         if enemy and enemy:FindFirstChild("HumanoidRootPart") then
-                            -- Teleport to Enemy (Redz Logic: TP2)
-                            local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0) -- Hover 30 studs above
+                            local dist = (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
                             
-                            -- Always use TP2 for movement and hovering
-                            TP2(farmPos)
-                            
-                            -- Magnet / Bring Mob Logic
-                            if (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 60 then
+                            if dist < 60 then
+                                -- Magnet Mode: Lock Position & Bring Enemy
+                                -- Prevent infinite upward spiral by NOT updating target relative to enemy while holding enemy
+                                TP2(LocalPlayer.Character.HumanoidRootPart.CFrame)
+                                
                                 -- Lock enemy in place
                                 enemy.HumanoidRootPart.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, -4, 0) -- Bring slightly below/front
                                 enemy.HumanoidRootPart.CanCollide = false
@@ -1615,6 +1614,10 @@ task.spawn(function()
                                         end
                                     end
                                 end
+                            else
+                                -- Approach Mode: Go to Enemy
+                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0) -- Hover 30 studs above
+                                TP2(farmPos)
                             end
                             
                             -- Attack
