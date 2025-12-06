@@ -869,7 +869,7 @@ task.spawn(function()
 end)
 
 function FastAttack:AttackNearest()
-    -- Lazy load remotes if missing (Fix for "not attacking" issue)
+    -- Lazy load remotes
     if not RegisterAttack or not RegisterHit then
         local Net = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("Net")
         if Net then
@@ -883,7 +883,7 @@ function FastAttack:AttackNearest()
     local myRoot = character and character:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
 
-    -- Anti-Sit (Prevent stun lock)
+    -- Anti-Sit
     local humanoid = character:FindFirstChild("Humanoid")
     if humanoid and humanoid.Sit then humanoid.Sit = false end
 
@@ -891,16 +891,15 @@ function FastAttack:AttackNearest()
     local baseEnemy = nil
     local closestDist = math.huge
 
-    -- Matsune-style enemy processing (Robust)
+    -- Enemy Processing
     local function ProcessEnemies(folder)
         if not folder then return end
         for _, enemy in pairs(folder:GetChildren()) do
             if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
-                -- Fallback to RootPart if Head is missing
                 local hitPart = enemy:FindFirstChild("Head") or enemy:FindFirstChild("HumanoidRootPart")
                 if hitPart then
                     local dist = (hitPart.Position - myRoot.Position).Magnitude
-                    if dist < 100 then -- 100 Stud Range
+                    if dist < 100 then
                         table.insert(enemiesToHit, {enemy, hitPart})
                         if dist < closestDist then
                             closestDist = dist
@@ -916,40 +915,26 @@ function FastAttack:AttackNearest()
     ProcessEnemies(workspace:FindFirstChild("Characters"))
 
     if #enemiesToHit > 0 and baseEnemy then
-        -- 1. Register Attack
+        -- 1. Register Attack (Reset Cooldown)
         RegisterAttack:FireServer(0)
         
-        -- 2. Register Hit
+        -- 2. Register Hit (Multi-Target Damage)
         RegisterHit:FireServer(baseEnemy, enemiesToHit)
         
-        -- 3. Tool Activation & Remote
+        -- 3. Tool Activation (Visuals/State)
         local tool = character:FindFirstChildOfClass("Tool")
         if tool then
-            tool:Activate() -- Native activation (Required for some weapons/visuals)
-            if tool:FindFirstChild("LeftClickRemote") then
-                for _, enemyData in ipairs(enemiesToHit) do
-                    local enemy = enemyData[1]
-                    local enemyRoot = enemy:FindFirstChild("HumanoidRootPart")
-                    if enemyRoot then
-                        local direction = (enemyRoot.Position - myRoot.Position).Unit
-                        tool.LeftClickRemote:FireServer(direction, 1)
-                    end
-                end
-            end
+            tool:Activate()
         end
     end
 end
 
--- Fast Attack Loop (Replaced Heartbeat with task.wait loop for stability)
-task.spawn(function()
-    while true do
-        local success, err = pcall(function()
-            if _G.Settings.Configs["Fast Attack"] and LocalPlayer.Character then
-                FastAttack:AttackNearest()
-            end
+-- Fast Attack Loop (Heartbeat for maximum speed and reliability)
+RunService.Heartbeat:Connect(function()
+    if _G.Settings.Configs["Fast Attack"] and LocalPlayer.Character then
+        pcall(function()
+            FastAttack:AttackNearest()
         end)
-        if not success then warn("FastAttack Error: " .. tostring(err)) end
-        task.wait(0.05) -- Slightly throttled to ~20Hz to prevent packet loss/throttling
     end
 end)
 
