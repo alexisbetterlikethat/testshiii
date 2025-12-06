@@ -845,7 +845,7 @@ end
 
 -- Fast Attack (Optimized)
 FastAttack = {
-    Distance = 60,
+    Distance = 100, -- Increased range for higher hover
     Enabled = false
 }
 
@@ -1612,7 +1612,7 @@ task.spawn(function()
                         if enemy and enemy:FindFirstChild("HumanoidRootPart") then
                             local dist = (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
                             
-                            if dist < 60 then
+                            if dist < 80 then -- Increased magnet activation distance
                                 -- Magnet Mode: Lock Position & Bring Enemy
                                 -- STABILITY FIX: Do NOT update TP2 target to current position (causes drift).
                                 -- Keep the existing _G.TargetCFrame if it exists.
@@ -1621,7 +1621,8 @@ task.spawn(function()
                                 end
                                 
                                 -- Lock enemy relative to OUR TARGET, not our physical body (prevents jitter)
-                                local lockPos = (_G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame) * CFrame.new(0, -5, 0)
+                                -- Increased offset to -70 to keep mobs far below the player (safer)
+                                local lockPos = (_G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame) * CFrame.new(0, -70, 0)
                                 
                                 enemy.HumanoidRootPart.CFrame = lockPos
                                 enemy.HumanoidRootPart.CanCollide = false
@@ -1643,7 +1644,7 @@ task.spawn(function()
                                 end
                             else
                                 -- Approach Mode: Go to Enemy
-                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 50, 0) -- Hover 50 studs above
+                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 70, 0) -- Hover 70 studs above
                                 TP2(farmPos)
                             end
                             
