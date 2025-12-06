@@ -871,8 +871,13 @@ end)
 function FastAttack:AttackNearest()
     if not RegisterAttack or not RegisterHit then return end
     
-    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local character = LocalPlayer.Character
+    local myRoot = character and character:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
+
+    -- Anti-Sit (Prevent stun lock)
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid and humanoid.Sit then humanoid.Sit = false end
 
     local enemiesToHit = {}
     local baseEnemy = nil
@@ -882,8 +887,8 @@ function FastAttack:AttackNearest()
         for _, enemy in pairs(workspace.Enemies:GetChildren()) do
             if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
                 local dist = (enemy.HumanoidRootPart.Position - myRoot.Position).Magnitude
-                -- Increased distance check to 60 to ensure hits connect even if slightly offset
-                if dist <= 60 then
+                -- Increased distance check to 70 to ensure hits connect even if slightly offset
+                if dist <= 70 then
                     -- Prefer Head for hit registration if available, otherwise RootPart
                     local hitPart = enemy:FindFirstChild("Head") or enemy.HumanoidRootPart
                     table.insert(enemiesToHit, {enemy, hitPart})
@@ -904,14 +909,17 @@ function FastAttack:AttackNearest()
         -- 2. Register Hit (All enemies)
         RegisterHit:FireServer(baseEnemy, enemiesToHit)
         
-        -- 3. Tool Click (Extra damage / Animation / Skill Trigger)
-        local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
-        if tool and tool:FindFirstChild("LeftClickRemote") then
-            -- Fire for EACH enemy to ensure hits (Matsune Logic)
-            for _, enemyData in ipairs(enemiesToHit) do
-                local enemy = enemyData[1]
-                local direction = (enemy.HumanoidRootPart.Position - myRoot.Position).Unit
-                tool.LeftClickRemote:FireServer(direction, 1)
+        -- 3. Tool Activation (Physical Swing + Remote)
+        local tool = character:FindFirstChildOfClass("Tool")
+        if tool then
+            tool:Activate() -- Native activation (Simulates click without mouse)
+            if tool:FindFirstChild("LeftClickRemote") then
+                -- Fire for EACH enemy to ensure hits (Matsune Logic)
+                for _, enemyData in ipairs(enemiesToHit) do
+                    local enemy = enemyData[1]
+                    local direction = (enemy.HumanoidRootPart.Position - myRoot.Position).Unit
+                    tool.LeftClickRemote:FireServer(direction, 1)
+                end
             end
         end
     end
@@ -2606,17 +2614,7 @@ FruitTab:CreateToggle({Name = "Tween To Nearest Fruit", CurrentValue = _G.Settin
     if v then _G.Settings.Fruit["Bring To Fruit"] = false end
 end}, "TweenFruit")
 
-local MaterialsTab = Window:CreateTab({Name = "Materials", Icon = GetIcon("Materials"), ImageSource = "Custom", ShowTitle = true})
-MaterialsTab:CreateToggle({Name = "Auto Farm Material", CurrentValue = _G.Settings.Materials["Auto Farm Material"], Callback = function(v) _G.Settings.Materials["Auto Farm Material"] = v end}, "AutoFarmMaterial")
-MaterialsTab:CreateDropdown({
-    Name = "Select Material",
-    Options = MaterialOptions,
-    CurrentOption = {_G.Settings.Materials["Select Material"]},
-    Callback = function(v)
-        _G.Settings.Materials["Select Material"] = unwrapOption(v)
-    end
-}, "SelectMaterial")
-
+-- Materials Tab Removed
 -- Bones Tab Removed
 
 local RaidTab = Window:CreateTab({Name = "Raid", Icon = GetIcon("Raid"), ImageSource = "Custom", ShowTitle = true})
