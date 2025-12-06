@@ -207,7 +207,7 @@ local TabIcons = {
     Update = "6034308946",
     Dashboard = "6022668883",
     Main = "6031068423",
-    Stats = "6034898096",
+    Stats = "6023565892", -- Changed to Bones icon (Graph-like) as fallback
     Shop = "6031265970",
     Materials = "6035056487",
     Bones = "6023565892",
@@ -1625,8 +1625,24 @@ task.spawn(function()
                             -- Force Enable Fast Attack
                             _G.Settings.Configs["Fast Attack"] = true
 
-                            -- Simple Movement Logic: Always fly to enemy + offset
-                            local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 12, 0)
+                            -- Smart Positioning: World Space + Ceiling Check
+                            local targetPos = enemy.HumanoidRootPart.Position + Vector3.new(0, 12, 0)
+                            
+                            -- Raycast to check for ceilings/walls above enemy
+                            local rayOrigin = enemy.HumanoidRootPart.Position
+                            local rayDirection = Vector3.new(0, 15, 0)
+                            local rayParams = RaycastParams.new()
+                            rayParams.FilterDescendantsInstances = {LocalPlayer.Character, workspace.Enemies, workspace:FindFirstChild("EnemySpawns")}
+                            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                            
+                            local rayResult = workspace:Raycast(rayOrigin, rayDirection, rayParams)
+                            if rayResult then
+                                -- If blocked, position slightly below the hit point
+                                targetPos = rayResult.Position - Vector3.new(0, 2.5, 0)
+                            end
+
+                            -- Look at Enemy
+                            local farmPos = CFrame.new(targetPos, enemy.HumanoidRootPart.Position)
                             TP2(farmPos)
                             
                             -- Bring Mobs (Optional: Keeps them close for efficiency)
