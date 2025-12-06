@@ -775,12 +775,15 @@ RunService.Heartbeat:Connect(function(dt)
         
         if dist > 500 then speed = 350 end
         
-        if dist < 5 then
+        if dist < 10 then
             -- Lock Position (Hover)
             hrp.CFrame = _G.TargetCFrame
             hrp.Velocity = Vector3.zero
+            if not hrp.Anchored then hrp.Anchored = true end -- Force Stability
         else
             -- Move towards target
+            if hrp.Anchored then hrp.Anchored = false end -- Force Mobility
+            
             local dir = (targetPos - currentPos).Unit
             local moveStep = dir * (speed * dt)
             
@@ -1630,10 +1633,6 @@ task.spawn(function()
                                     TP2(LocalPlayer.Character.HumanoidRootPart.CFrame)
                                 end
                                 
-                                -- Anchor Player for maximum stability
-                                LocalPlayer.Character.HumanoidRootPart.Anchored = true
-                                LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
-                                
                                 -- Calculate Lock Position (12 studs below player - Close Range)
                                 local targetCFrame = _G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame
                                 local lockPos = targetCFrame * CFrame.new(0, -12, 0)
@@ -1665,9 +1664,6 @@ task.spawn(function()
                                 end
                             else
                                 -- APPROACH MODE: Chase
-                                if LocalPlayer.Character.HumanoidRootPart.Anchored then
-                                    LocalPlayer.Character.HumanoidRootPart.Anchored = false
-                                end
                                 local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 12, 0)
                                 TP2(farmPos)
                             end
