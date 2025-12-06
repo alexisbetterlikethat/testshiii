@@ -771,7 +771,7 @@ RunService.Heartbeat:Connect(function(dt)
         local targetPos = _G.TargetCFrame.Position
         local currentPos = hrp.Position
         local dist = (targetPos - currentPos).Magnitude
-        local speed = 250 -- Constant speed for consistency
+        local speed = 350 -- Adjusted to user preference
         
         if dist < 5 then
             -- Lock Position (Hover)
@@ -1639,6 +1639,17 @@ task.spawn(function()
                             if rayResult then
                                 -- If blocked, position slightly below the hit point
                                 targetPos = rayResult.Position - Vector3.new(0, 2.5, 0)
+                            end
+                            
+                            -- Wall Check: Nudge away from walls
+                            local checkDist = 3
+                            local dirs = {Vector3.new(1,0,0), Vector3.new(-1,0,0), Vector3.new(0,0,1), Vector3.new(0,0,-1)}
+                            for _, d in ipairs(dirs) do
+                                local wallRay = workspace:Raycast(targetPos, d * checkDist, rayParams)
+                                if wallRay then
+                                    -- Move away from wall
+                                    targetPos = targetPos - (d * (checkDist - wallRay.Distance + 1))
+                                end
                             end
 
                             -- Look at Enemy
