@@ -797,17 +797,33 @@ function TweenX(target)
         end)
     end
 
-    local distance = (root.Position - targetCFrame.Position).Magnitude
+    local currentPos = root.Position
+    local targetPos = targetCFrame.Position
+    local horizontalDist = (Vector3.new(targetPos.X, 0, targetPos.Z) - Vector3.new(currentPos.X, 0, currentPos.Z)).Magnitude
+    
+    local finalDestination = targetCFrame
     local speed = 350 -- Studs per second
+    
+    -- Safety Height Logic
+    if horizontalDist > 150 then
+        -- If far, fly high
+        local safeY = 350
+        if targetPos.Y > safeY then
+            safeY = targetPos.Y + 50
+        end
+        finalDestination = CFrame.new(targetPos.X, safeY, targetPos.Z)
+    end
+
+    local distance = (root.Position - finalDestination.Position).Magnitude
     local time = distance / speed
     
     local info = TweenInfo.new(time, Enum.EasingStyle.Linear)
     
-    _tween = TweenService:Create(root, info, {CFrame = targetCFrame})
+    _tween = TweenService:Create(root, info, {CFrame = finalDestination})
     _tween:Play()
     
     -- Optional: Teleport if very close to avoid slow tween start
-    if distance < 50 then
+    if distance < 50 and horizontalDist < 50 then
         root.CFrame = targetCFrame
         _tween:Cancel()
         _tween = nil
@@ -2821,7 +2837,7 @@ end
 TravelTab:CreateDropdown({
     Name = "Select Island",
     Options = IslandList,
-    CurrentOption = {_G.Settings.Teleport["Select Island"]},
+    CurrentOption = {table.find(IslandList, _G.Settings.Teleport["Select Island"]) and _G.Settings.Teleport["Select Island"] or IslandList[1]},
     Callback = function(v)
         _G.Settings.Teleport["Select Island"] = unwrapOption(v)
     end
@@ -3034,7 +3050,7 @@ end}, "AutoSelectTeam")
 SettingsTab:CreateDropdown({
     Name = "Preferred Team",
     Options = {"Pirates", "Marines"},
-    CurrentOption = {_G.Settings.Teams["Preferred Team"]},
+    CurrentOption = {table.find({"Pirates", "Marines"}, _G.Settings.Teams["Preferred Team"]) and _G.Settings.Teams["Preferred Team"] or "Pirates"},
     Callback = function(v)
         _G.Settings.Teams["Preferred Team"] = unwrapOption(v)
         AutoChooseTeam()
