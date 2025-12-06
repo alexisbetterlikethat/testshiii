@@ -896,7 +896,12 @@ function FastAttack:AttackNearest()
         -- 3. Tool Click (Extra damage / Animation / Skill Trigger)
         local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
         if tool and tool:FindFirstChild("LeftClickRemote") then
-            tool.LeftClickRemote:FireServer()
+            -- Fire for EACH enemy to ensure hits (Matsune Logic)
+            for _, enemyData in ipairs(enemiesToHit) do
+                local enemy = enemyData[1]
+                local direction = (enemy.HumanoidRootPart.Position - myRoot.Position).Unit
+                tool.LeftClickRemote:FireServer(direction, 1)
+            end
         end
     end
 end
@@ -1638,7 +1643,7 @@ task.spawn(function()
                                 end
                             else
                                 -- Approach Mode: Go to Enemy
-                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0) -- Hover 30 studs above
+                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 50, 0) -- Hover 50 studs above
                                 TP2(farmPos)
                             end
                             
