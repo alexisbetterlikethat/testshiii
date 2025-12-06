@@ -1621,8 +1621,9 @@ task.spawn(function()
                                 end
                                 
                                 -- Lock enemy relative to OUR TARGET, not our physical body (prevents jitter)
-                                -- Increased offset to -70 to keep mobs far below the player (safer)
-                                local lockPos = (_G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame) * CFrame.new(0, -70, 0)
+                                -- Use World Space Y offset to ensure "down" is always "down" regardless of rotation
+                                local targetPos = (_G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame).Position
+                                local lockPos = CFrame.new(targetPos - Vector3.new(0, 70, 0))
                                 
                                 enemy.HumanoidRootPart.CFrame = lockPos
                                 enemy.HumanoidRootPart.CanCollide = false
@@ -1644,7 +1645,9 @@ task.spawn(function()
                                 end
                             else
                                 -- Approach Mode: Go to Enemy
-                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 70, 0) -- Hover 70 studs above
+                                -- Use World Space Y offset to ensure we are truly ABOVE the enemy
+                                local enemyPos = enemy.HumanoidRootPart.Position
+                                local farmPos = CFrame.new(enemyPos + Vector3.new(0, 70, 0))
                                 TP2(farmPos)
                             end
                             
