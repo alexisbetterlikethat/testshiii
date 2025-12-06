@@ -1137,7 +1137,7 @@ local function GetQuestData(level)
     end
 
     -- Fallback to QuestDatabase if GuideModule fails
-    warn("Aero Hub: GuideModule failed, using fallback database.")
+    
     local bestQuest = nil
     for _, questData in ipairs(QuestDatabase) do
         if level >= questData.Level then 
@@ -1610,11 +1610,6 @@ task.spawn(function()
                         end
                         
                         if enemy and enemy:FindFirstChild("HumanoidRootPart") then
-                            -- Network Ownership (Ensure mobs move)
-                            pcall(function()
-                                sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
-                            end)
-
                             local dist = (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
                             
                             if dist < 80 then -- Increased magnet activation distance
@@ -1628,7 +1623,7 @@ task.spawn(function()
                                 -- Lock enemy relative to OUR TARGET, not our physical body (prevents jitter)
                                 -- Use World Space Y offset to ensure "down" is always "down" regardless of rotation
                                 local targetPos = (_G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame).Position
-                                local lockPos = CFrame.new(targetPos - Vector3.new(0, 100, 0)) -- Increased to 100 studs
+                                local lockPos = CFrame.new(targetPos - Vector3.new(0, 70, 0)) -- Reverted to 70 studs
                                 
                                 pcall(function()
                                     enemy.HumanoidRootPart.CFrame = lockPos
@@ -1656,7 +1651,7 @@ task.spawn(function()
                                 -- Approach Mode: Go to Enemy
                                 -- Use World Space Y offset to ensure we are truly ABOVE the enemy
                                 local enemyPos = enemy.HumanoidRootPart.Position
-                                local farmPos = CFrame.new(enemyPos + Vector3.new(0, 100, 0)) -- Increased to 100 studs
+                                local farmPos = CFrame.new(enemyPos + Vector3.new(0, 70, 0)) -- Reverted to 70 studs
                                 TP2(farmPos)
                             end
                             
