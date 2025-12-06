@@ -828,19 +828,15 @@ function TP2(target)
     local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target) or nil
     if not targetCFrame then return end
     
-    -- Check Teleporters (Instant Travel)
+    -- Direct Flight (Bypass Teleporters for reliability)
+    _G.TargetCFrame = targetCFrame
+    
+    -- Ensure mobility when target changes
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local dist = (LocalPlayer.Character.HumanoidRootPart.Position - targetCFrame.Position).Magnitude
-        if dist > 1000 then
-            local teleporter = CheckNearestTeleporter(targetCFrame.Position)
-            if teleporter then
-                requestEntrance(teleporter)
-                return
-            end
+        if LocalPlayer.Character.HumanoidRootPart.Anchored then
+             LocalPlayer.Character.HumanoidRootPart.Anchored = false
         end
     end
-
-    _G.TargetCFrame = targetCFrame
 end
 
 -- Fast Attack (Optimized)
@@ -1653,7 +1649,9 @@ task.spawn(function()
                                 end
                             else
                                 -- APPROACH MODE: Chase
-                                LocalPlayer.Character.HumanoidRootPart.Anchored = false
+                                if LocalPlayer.Character.HumanoidRootPart.Anchored then
+                                    LocalPlayer.Character.HumanoidRootPart.Anchored = false
+                                end
                                 local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 50, 0)
                                 TP2(farmPos)
                             end
