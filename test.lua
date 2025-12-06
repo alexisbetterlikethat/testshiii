@@ -1592,11 +1592,16 @@ task.spawn(function()
                             
                             if dist < 60 then
                                 -- Magnet Mode: Lock Position & Bring Enemy
-                                -- Prevent infinite upward spiral by NOT updating target relative to enemy while holding enemy
-                                TP2(LocalPlayer.Character.HumanoidRootPart.CFrame)
+                                -- STABILITY FIX: Do NOT update TP2 target to current position (causes drift).
+                                -- Keep the existing _G.TargetCFrame if it exists.
+                                if not _G.TargetCFrame then
+                                    TP2(LocalPlayer.Character.HumanoidRootPart.CFrame)
+                                end
                                 
-                                -- Lock enemy in place
-                                enemy.HumanoidRootPart.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, -4, 0) -- Bring slightly below/front
+                                -- Lock enemy relative to OUR TARGET, not our physical body (prevents jitter)
+                                local lockPos = (_G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame) * CFrame.new(0, -5, 0)
+                                
+                                enemy.HumanoidRootPart.CFrame = lockPos
                                 enemy.HumanoidRootPart.CanCollide = false
                                 enemy.Humanoid.WalkSpeed = 0
                                 enemy.Humanoid.JumpPower = 0
@@ -1607,7 +1612,7 @@ task.spawn(function()
                                 for _, other in pairs(workspace.Enemies:GetChildren()) do
                                     if other.Name == targetName and other ~= enemy and other:FindFirstChild("HumanoidRootPart") and other:FindFirstChild("Humanoid") and other.Humanoid.Health > 0 then
                                         if (other.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 300 then
-                                            other.HumanoidRootPart.CFrame = enemy.HumanoidRootPart.CFrame
+                                            other.HumanoidRootPart.CFrame = lockPos
                                             other.HumanoidRootPart.CanCollide = false
                                             other.Humanoid.WalkSpeed = 0
                                             other.Humanoid:ChangeState(11)
