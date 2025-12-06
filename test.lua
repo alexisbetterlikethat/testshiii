@@ -1612,34 +1612,38 @@ task.spawn(function()
                         if enemy and enemy:FindFirstChild("HumanoidRootPart") then
                             local dist = (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
                             
-                            if dist < 80 then -- Increased magnet activation distance
-                                -- Magnet Mode: Lock Position & Bring Enemy
-                                -- STABILITY FIX: Do NOT update TP2 target to current position (causes drift).
-                                -- Keep the existing _G.TargetCFrame if it exists.
+                            if dist < 80 then
+                                -- MAGNET MODE: Lock & Anchor
                                 if not _G.TargetCFrame then
                                     TP2(LocalPlayer.Character.HumanoidRootPart.CFrame)
                                 end
                                 
-                                -- Lock enemy relative to OUR TARGET, not our physical body (prevents jitter)
-                                -- Use World Space Y offset to ensure "down" is always "down" regardless of rotation
-                                local targetPos = (_G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame).Position
-                                local lockPos = CFrame.new(targetPos - Vector3.new(0, 70, 0)) -- Reverted to 70 studs
+                                -- Anchor Player for maximum stability
+                                LocalPlayer.Character.HumanoidRootPart.Anchored = true
+                                LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
                                 
+                                -- Calculate Lock Position (60 studs below player)
+                                local targetCFrame = _G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame
+                                local lockPos = targetCFrame * CFrame.new(0, -60, 0)
+                                
+                                -- Anchor & Bring Main Enemy
                                 pcall(function()
                                     enemy.HumanoidRootPart.CFrame = lockPos
+                                    enemy.HumanoidRootPart.Anchored = true
                                     enemy.HumanoidRootPart.CanCollide = false
                                     enemy.Humanoid.WalkSpeed = 0
                                     enemy.Humanoid.JumpPower = 0
+                                    enemy.Humanoid:ChangeState(11)
                                     if enemy.Humanoid:FindFirstChild("Animator") then enemy.Humanoid.Animator:Destroy() end
-                                    enemy.Humanoid:ChangeState(11) -- PlatformStand
                                 end)
                                 
-                                -- Bring other nearby mobs
+                                -- Anchor & Bring Nearby Enemies
                                 for _, other in pairs(workspace.Enemies:GetChildren()) do
                                     if other.Name == targetName and other ~= enemy and other:FindFirstChild("HumanoidRootPart") and other:FindFirstChild("Humanoid") and other.Humanoid.Health > 0 then
                                         if (other.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 300 then
                                             pcall(function()
                                                 other.HumanoidRootPart.CFrame = lockPos
+                                                other.HumanoidRootPart.Anchored = true
                                                 other.HumanoidRootPart.CanCollide = false
                                                 other.Humanoid.WalkSpeed = 0
                                                 other.Humanoid:ChangeState(11)
@@ -1648,10 +1652,9 @@ task.spawn(function()
                                     end
                                 end
                             else
-                                -- Approach Mode: Go to Enemy
-                                -- Use World Space Y offset to ensure we are truly ABOVE the enemy
-                                local enemyPos = enemy.HumanoidRootPart.Position
-                                local farmPos = CFrame.new(enemyPos + Vector3.new(0, 70, 0)) -- Reverted to 70 studs
+                                -- APPROACH MODE: Chase
+                                LocalPlayer.Character.HumanoidRootPart.Anchored = false
+                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 60, 0)
                                 TP2(farmPos)
                             end
                             
@@ -1682,6 +1685,9 @@ task.spawn(function()
             _G.TargetCFrame = nil
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
                 LocalPlayer.Character.Humanoid.PlatformStand = false
+            end
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                LocalPlayer.Character.HumanoidRootPart.Anchored = false
             end
         end
     end
