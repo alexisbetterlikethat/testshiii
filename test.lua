@@ -775,7 +775,7 @@ RunService.Heartbeat:Connect(function(dt)
         
         if dist > 500 then speed = 350 end
         
-        if dist < 10 then
+        if dist < 5 then
             -- Lock Position (Hover)
             hrp.CFrame = _G.TargetCFrame
             hrp.Velocity = Vector3.zero
@@ -1622,39 +1622,22 @@ task.spawn(function()
                         end
                         
                         if enemy and enemy:FindFirstChild("HumanoidRootPart") then
-                            local dist = (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-                            
                             -- Force Enable Fast Attack
                             _G.Settings.Configs["Fast Attack"] = true
 
-                            if dist < 80 then
-                                -- MAGNET MODE: Lock & Anchor
-                                if not _G.TargetCFrame then
-                                    TP2(LocalPlayer.Character.HumanoidRootPart.CFrame)
-                                end
-                                
-                                -- Calculate Lock Position (12 studs below player - Close Range)
-                                local targetCFrame = _G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame
-                                local lockPos = targetCFrame * CFrame.new(0, -12, 0)
-                                
-                                -- Anchor & Bring Main Enemy
-                                pcall(function()
-                                    enemy.HumanoidRootPart.CFrame = lockPos
-                                    enemy.HumanoidRootPart.Anchored = true
-                                    enemy.HumanoidRootPart.CanCollide = false
-                                    enemy.Humanoid.WalkSpeed = 0
-                                    enemy.Humanoid.JumpPower = 0
-                                    enemy.Humanoid:ChangeState(11)
-                                    if enemy.Humanoid:FindFirstChild("Animator") then enemy.Humanoid.Animator:Destroy() end
-                                end)
-                                
-                                -- Anchor & Bring Nearby Enemies
+                            -- Simple Movement Logic: Always fly to enemy + offset
+                            local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 12, 0)
+                            TP2(farmPos)
+                            
+                            -- Bring Mobs (Optional: Keeps them close for efficiency)
+                            -- Only bring them if we are close enough to the main target
+                            local dist = (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                            if dist < 50 then
                                 for _, other in pairs(workspace.Enemies:GetChildren()) do
                                     if other.Name == targetName and other ~= enemy and other:FindFirstChild("HumanoidRootPart") and other:FindFirstChild("Humanoid") and other.Humanoid.Health > 0 then
-                                        if (other.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 300 then
+                                        if (other.HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude < 300 then
                                             pcall(function()
-                                                other.HumanoidRootPart.CFrame = lockPos
-                                                other.HumanoidRootPart.Anchored = true
+                                                other.HumanoidRootPart.CFrame = enemy.HumanoidRootPart.CFrame
                                                 other.HumanoidRootPart.CanCollide = false
                                                 other.Humanoid.WalkSpeed = 0
                                                 other.Humanoid:ChangeState(11)
@@ -1662,10 +1645,6 @@ task.spawn(function()
                                         end
                                     end
                                 end
-                            else
-                                -- APPROACH MODE: Chase
-                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 12, 0)
-                                TP2(farmPos)
                             end
                             
                             -- Attack (Force Trigger)
