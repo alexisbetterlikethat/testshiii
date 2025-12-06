@@ -1580,7 +1580,41 @@ local function GetMobSpawns(mobName)
     return spawns
 end
 
-local spawnIndex = 1
+-- Global Target for Locking
+_G.CurrentTarget = nil
+
+-- Strong Enemy Lock & Bring Loop (Heartbeat)
+RunService.Heartbeat:Connect(function()
+    local target = _G.CurrentTarget
+    if target and target:FindFirstChild("Humanoid") and target.Humanoid.Health > 0 and target:FindFirstChild("HumanoidRootPart") then
+        -- Lock Target
+        pcall(function()
+            target.Humanoid.WalkSpeed = 0
+            target.HumanoidRootPart.Velocity = Vector3.zero
+            target.HumanoidRootPart.Anchored = true
+            target.HumanoidRootPart.CanCollide = false
+        end)
+
+        -- Bring Nearby Mobs to Target (Cluster)
+        if _G.Settings.Main["Auto Farm Level"] then
+            for _, other in pairs(workspace.Enemies:GetChildren()) do
+                if other ~= target and other.Name == target.Name and other:FindFirstChild("HumanoidRootPart") and other:FindFirstChild("Humanoid") and other.Humanoid.Health > 0 then
+                    if (other.HumanoidRootPart.Position - target.HumanoidRootPart.Position).Magnitude < 300 then
+                        pcall(function()
+                            other.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame
+                            other.HumanoidRootPart.CanCollide = false
+                            other.HumanoidRootPart.Anchored = true
+                            other.Humanoid.WalkSpeed = 0
+                            other.Humanoid:ChangeState(11)
+                        end)
+                    end
+                end
+            end
+        end
+    else
+        _G.CurrentTarget = nil
+    end
+end)
 
 -- Auto Farm Level (Redz Logic - Re-implemented)
 task.spawn(function()
@@ -1601,6 +1635,7 @@ task.spawn(function()
                     local hasQuest = questGui and questGui.Visible and (string.find(questGui.Container.QuestTitle.Title.Text, questData.Mob) or string.find(questGui.Container.QuestTitle.Title.Text, "Boss"))
                     
                     if not hasQuest then
+                        _G.CurrentTarget = nil -- Clear target when getting quest
                         if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
                         -- Abandon wrong quest
                         if questGui and questGui.Visible then
@@ -1635,6 +1670,9 @@ task.spawn(function()
                         end
                         
                         if enemy and enemy:FindFirstChild("HumanoidRootPart") then
+                            -- Set Global Target for Locking Loop
+                            _G.CurrentTarget = enemy
+
                             -- Force Enable Fast Attack
                             _G.Settings.Configs["Fast Attack"] = true
 
@@ -1656,46 +1694,19 @@ task.spawn(function()
                             end
                             
                             -- Wall Check: Nudge away from walls
-                            local checkDist = 3
+                            local checkDist = 2 -- Reduced to 2 to prevent being pushed too far
                             local dirs = {Vector3.new(1,0,0), Vector3.new(-1,0,0), Vector3.new(0,0,1), Vector3.new(0,0,-1)}
                             for _, d in ipairs(dirs) do
                                 local wallRay = workspace:Raycast(targetPos, d * checkDist, rayParams)
                                 if wallRay then
                                     -- Move away from wall
-                                    targetPos = targetPos - (d * (checkDist - wallRay.Distance + 1))
+                                    targetPos = targetPos - (d * (checkDist - wallRay.Distance + 0.5))
                                 end
                             end
 
                             -- Look at Enemy
                             local farmPos = CFrame.new(targetPos, enemy.HumanoidRootPart.Position)
                             TP2(farmPos)
-
-                            -- Lock Target Enemy (Prevent moving into walls)
-                            pcall(function()
-                                if enemy.Humanoid.WalkSpeed > 0 then enemy.Humanoid.WalkSpeed = 0 end
-                                if enemy.HumanoidRootPart.CanCollide then enemy.HumanoidRootPart.CanCollide = false end
-                                enemy.HumanoidRootPart.Velocity = Vector3.zero
-                                enemy.HumanoidRootPart.Anchored = true
-                            end)
-                            
-                            -- Bring Mobs (Optional: Keeps them close for efficiency)
-                            -- Only bring them if we are close enough to the main target
-                            local dist = (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-                            if dist < 50 then
-                                for _, other in pairs(workspace.Enemies:GetChildren()) do
-                                    if other.Name == targetName and other ~= enemy and other:FindFirstChild("HumanoidRootPart") and other:FindFirstChild("Humanoid") and other.Humanoid.Health > 0 then
-                                        if (other.HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude < 300 then
-                                            pcall(function()
-                                                other.HumanoidRootPart.CFrame = enemy.HumanoidRootPart.CFrame
-                                                other.HumanoidRootPart.CanCollide = false
-                                                other.Humanoid.WalkSpeed = 0
-                                                other.HumanoidRootPart.Anchored = true
-                                                other.Humanoid:ChangeState(11)
-                                            end)
-                                        end
-                                    end
-                                end
-                            end
                             
                             -- Attack (Force Trigger)
                             EquipPreferredWeapon()
@@ -1705,6 +1716,7 @@ task.spawn(function()
                             FastAttack:AttackNearest()
                         else
                             -- No enemy found: Go to Spawn
+                            _G.CurrentTarget = nil
                             if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
                             
                             local spawns = GetMobSpawns(targetName)
