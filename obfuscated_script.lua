@@ -703,6 +703,7 @@ end
 
 -- Helper: Teleporters
 function CheckNearestTeleporter(targetPos)
+    local targetVec = (typeof(targetPos) == "CFrame" and targetPos.Position) or targetPos
     local myPos = LocalPlayer.Character.HumanoidRootPart.Position
     local minDist = math.huge
     local bestTeleporter = nil
@@ -736,14 +737,14 @@ function CheckNearestTeleporter(targetPos)
     end
 
     for name, pos in pairs(teleporters) do
-        local d = (pos - targetPos).Magnitude
+        local d = (pos - targetVec).Magnitude
         if d < minDist then
             minDist = d
             bestTeleporter = pos
         end
     end
 
-    if minDist < (targetPos - myPos).Magnitude then
+    if minDist < (targetVec - myPos).Magnitude then
         return bestTeleporter
     end
     return nil
@@ -761,7 +762,7 @@ local tweenActive = false
 local tweenid = 0
 local lastTweenTarget = nil
 local tweenPause = false
-local Util = require(ReplicatedStorage.Util)
+-- local Util = require(ReplicatedStorage.Util) -- Removed dependency
 
 function TP2(target)
     local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target) or nil
@@ -781,9 +782,7 @@ function TP2(target)
                     lastTweenTarget = targetCFrame
                     currentTweenId = tweenid
                     
-                    if Util.FPSTracker.FPS > 60 then
-                        setfpscap(200)
-                    end
+                    -- Removed Util.FPSTracker check
                     
                     task.spawn(pcall, function()
                         local lastPos = {tick(), targetCFrame}
@@ -800,7 +799,9 @@ function TP2(target)
                         end
                         
                         while LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and (75 < currentDist and (currentTweenId == tweenid and LocalPlayer.Character.Humanoid.Health > 0)) do
-                            local fpsMultiplier = 58 / math.clamp(Util.FPSTracker.FPS, 0, 60)
+                            local fps = workspace:GetRealPhysicsFPS()
+                            if fps < 1 then fps = 60 end
+                            local fpsMultiplier = 58 / math.clamp(fps, 1, 999)
                             local speed = 5.5 * fpsMultiplier -- Speed Factor
                             
                             local currentPos = LocalPlayer.Character.HumanoidRootPart.Position
