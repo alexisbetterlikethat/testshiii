@@ -883,41 +883,41 @@ function FastAttack:AttackNearest()
     local baseEnemy = nil
     local closestDist = math.huge
 
-    if workspace:FindFirstChild("Enemies") then
-        for _, enemy in pairs(workspace.Enemies:GetChildren()) do
-            if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
-                local dist = (enemy.HumanoidRootPart.Position - myRoot.Position).Magnitude
-                -- Increased distance check to 70 to ensure hits connect even if slightly offset
-                if dist <= 70 then
-                    -- Prefer Head for hit registration if available, otherwise RootPart
-                    local hitPart = enemy:FindFirstChild("Head") or enemy.HumanoidRootPart
-                    table.insert(enemiesToHit, {enemy, hitPart})
-                    
+    -- Matsune-style enemy processing
+    local function ProcessEnemies(folder)
+        if not folder then return end
+        for _, enemy in pairs(folder:GetChildren()) do
+            if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("Head") then
+                local dist = (enemy.Head.Position - myRoot.Position).Magnitude
+                if dist < 100 then -- Increased to 100 to match Matsune
+                    table.insert(enemiesToHit, {enemy, enemy.Head})
                     if dist < closestDist then
                         closestDist = dist
-                        baseEnemy = hitPart
+                        baseEnemy = enemy.Head
                     end
                 end
             end
         end
     end
 
+    ProcessEnemies(workspace:FindFirstChild("Enemies"))
+    ProcessEnemies(workspace:FindFirstChild("Characters")) -- Also hit other players/NPCs in Characters folder
+
     if #enemiesToHit > 0 and baseEnemy then
-        -- 1. Register Attack (Cooldown 0 for max speed)
+        -- 1. Register Attack
         RegisterAttack:FireServer(0)
         
-        -- 2. Register Hit (All enemies)
+        -- 2. Register Hit
         RegisterHit:FireServer(baseEnemy, enemiesToHit)
         
-        -- 3. Tool Activation (Physical Swing + Remote)
+        -- 3. Tool Remote (LeftClickRemote)
         local tool = character:FindFirstChildOfClass("Tool")
-        if tool then
-            tool:Activate() -- Native activation (Simulates click without mouse)
-            if tool:FindFirstChild("LeftClickRemote") then
-                -- Fire for EACH enemy to ensure hits (Matsune Logic)
-                for _, enemyData in ipairs(enemiesToHit) do
-                    local enemy = enemyData[1]
-                    local direction = (enemy.HumanoidRootPart.Position - myRoot.Position).Unit
+        if tool and tool:FindFirstChild("LeftClickRemote") then
+            for _, enemyData in ipairs(enemiesToHit) do
+                local enemy = enemyData[1]
+                local enemyRoot = enemy:FindFirstChild("HumanoidRootPart")
+                if enemyRoot then
+                    local direction = (enemyRoot.Position - myRoot.Position).Unit
                     tool.LeftClickRemote:FireServer(direction, 1)
                 end
             end
@@ -925,10 +925,16 @@ function FastAttack:AttackNearest()
     end
 end
 
--- Fast Attack Loop (Heartbeat for max speed)
-RunService.Heartbeat:Connect(function()
-    if _G.Settings.Configs["Fast Attack"] and LocalPlayer.Character then
-        FastAttack:AttackNearest()
+-- Fast Attack Loop (Replaced Heartbeat with task.wait loop for stability)
+task.spawn(function()
+    while true do
+        local success, err = pcall(function()
+            if _G.Settings.Configs["Fast Attack"] and LocalPlayer.Character then
+                FastAttack:AttackNearest()
+            end
+        end)
+        if not success then warn("FastAttack Error: " .. tostring(err)) end
+        task.wait(0.05) -- Slightly throttled to ~20Hz to prevent packet loss/throttling
     end
 end)
 
