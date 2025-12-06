@@ -771,9 +771,9 @@ RunService.Heartbeat:Connect(function(dt)
         local targetPos = _G.TargetCFrame.Position
         local currentPos = hrp.Position
         local dist = (targetPos - currentPos).Magnitude
-        local speed = 350
+        local speed = 250
         
-        if dist > 500 then speed = 500 end
+        if dist > 500 then speed = 350 end
         
         if dist < 5 then
             -- Lock Position (Hover)
@@ -1608,6 +1608,9 @@ task.spawn(function()
                         if enemy and enemy:FindFirstChild("HumanoidRootPart") then
                             local dist = (enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
                             
+                            -- Force Enable Fast Attack
+                            _G.Settings.Configs["Fast Attack"] = true
+
                             if dist < 80 then
                                 -- MAGNET MODE: Lock & Anchor
                                 if not _G.TargetCFrame then
@@ -1618,9 +1621,9 @@ task.spawn(function()
                                 LocalPlayer.Character.HumanoidRootPart.Anchored = true
                                 LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
                                 
-                                -- Calculate Lock Position (50 studs below player)
+                                -- Calculate Lock Position (25 studs below player)
                                 local targetCFrame = _G.TargetCFrame or LocalPlayer.Character.HumanoidRootPart.CFrame
-                                local lockPos = targetCFrame * CFrame.new(0, -50, 0)
+                                local lockPos = targetCFrame * CFrame.new(0, -25, 0)
                                 
                                 -- Anchor & Bring Main Enemy
                                 pcall(function()
@@ -1652,7 +1655,7 @@ task.spawn(function()
                                 if LocalPlayer.Character.HumanoidRootPart.Anchored then
                                     LocalPlayer.Character.HumanoidRootPart.Anchored = false
                                 end
-                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 50, 0)
+                                local farmPos = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 25, 0)
                                 TP2(farmPos)
                             end
                             
