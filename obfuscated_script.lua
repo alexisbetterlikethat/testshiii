@@ -26,6 +26,22 @@ Window:CreateHomeTab({
     Icon = 1
 })
 
+-- Icon helper for tabs (Material names to avoid nil icons)
+local IconMap = {
+    Dashboard = "space_dashboard",
+    Main = "sports_kabaddi",
+    Stats = "insights",
+    Fruit = "spa",
+    Raid = "swords",
+    ESP = "visibility",
+    Travel = "travel_explore",
+    Settings = "settings"
+}
+
+local function GetIcon(name)
+    return IconMap[name] or "home"
+end
+
 -- Global Settings
 _G.FarmPosition = nil
 _G.Settings = {
@@ -784,7 +800,8 @@ function FastAttack:AttackNearest()
     local function ProcessEnemies(folder)
         if not folder then return end
         for _, enemy in pairs(folder:GetChildren()) do
-            if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
+            local owner = Players:GetPlayerFromCharacter(enemy)
+            if not owner and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
                 local hitPart = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Head")
                 if hitPart then
                     local dist = (hitPart.Position - myRoot.Position).Magnitude
@@ -2236,7 +2253,7 @@ local function getBoatDisplayName(remoteName)
     return "Pirate Brigade"
 end
 
-local DashboardTab = Window:CreateTab({Name = "Dashboard", Icon = GetIcon("Dashboard"), ImageSource = "Custom", ShowTitle = true})
+local DashboardTab = Window:CreateTab({Name = "Dashboard", Icon = GetIcon("Dashboard"), ImageSource = "Material", ShowTitle = true})
 task.wait(0.1)
 DashboardTab:CreateSection("Profile Snapshot")
 local ProfileStatusParagraph = DashboardTab:CreateParagraph({
@@ -2429,7 +2446,7 @@ task.spawn(function()
     end
 end)
 
-local MainTab = Window:CreateTab({Name = "Main", Icon = GetIcon("Main"), ImageSource = "Custom", ShowTitle = true})
+local MainTab = Window:CreateTab({Name = "Main", Icon = GetIcon("Main"), ImageSource = "Material", ShowTitle = true})
 task.wait(0.1)
 
 MainTab:CreateSection("Farming")
@@ -2490,7 +2507,7 @@ MainTab:CreateToggle({Name = "Stop On Chalice/Fist", CurrentValue = _G.Settings.
 end}, "StopChestRare")
 
 
-local StatsTab = Window:CreateTab({Name = "Stats", Icon = GetIcon("Stats"), ImageSource = "Custom", ShowTitle = true})
+local StatsTab = Window:CreateTab({Name = "Stats", Icon = GetIcon("Stats"), ImageSource = "Material", ShowTitle = true})
 task.wait(0.1)
 StatsTab:CreateToggle({Name = "Auto Stats", CurrentValue = _G.Settings.Stats["Enabled Auto Stats"], Callback = function(v) _G.Settings.Stats["Enabled Auto Stats"] = v end}, "AutoStats")
 StatsTab:CreateDropdown({
@@ -2505,7 +2522,7 @@ StatsTab:CreateSlider({Name = "Points per Loop", Range = {1, 100}, Increment = 1
 
 
 
-local FruitTab = Window:CreateTab({Name = "Fruits", Icon = GetIcon("Fruit"), ImageSource = "Custom", ShowTitle = true})
+local FruitTab = Window:CreateTab({Name = "Fruits", Icon = GetIcon("Fruit"), ImageSource = "Material", ShowTitle = true})
 task.wait(0.1)
 FruitTab:CreateSection("Sniper")
 FruitTab:CreateDropdown({
@@ -2546,7 +2563,7 @@ FruitTab:CreateToggle({Name = "Tween To Nearest Fruit", CurrentValue = _G.Settin
     if v then _G.Settings.Fruit["Bring To Fruit"] = false end
 end}, "TweenFruit")
 
-local RaidTab = Window:CreateTab({Name = "Raid", Icon = GetIcon("Raid"), ImageSource = "Custom", ShowTitle = true})
+local RaidTab = Window:CreateTab({Name = "Raid", Icon = GetIcon("Raid"), ImageSource = "Material", ShowTitle = true})
 task.wait(0.1)
 RaidTab:CreateToggle({Name = "Auto Start Raid", CurrentValue = _G.Settings.Raid["Auto Start Raid"], Callback = function(v) _G.Settings.Raid["Auto Start Raid"] = v end}, "AutoStartRaid")
 RaidTab:CreateToggle({Name = "Auto Buy Chip", CurrentValue = _G.Settings.Raid["Auto Buy Chip"], Callback = function(v) _G.Settings.Raid["Auto Buy Chip"] = v end}, "AutoBuyChip")
@@ -2562,7 +2579,7 @@ RaidTab:CreateToggle({Name = "Auto Awaken", CurrentValue = _G.Settings.Raid["Aut
 
 
 
-local ESPTab = Window:CreateTab({Name = "ESP", Icon = GetIcon("ESP"), ImageSource = "Custom", ShowTitle = true})
+local ESPTab = Window:CreateTab({Name = "ESP", Icon = GetIcon("ESP"), ImageSource = "Material", ShowTitle = true})
 task.wait(0.1)
 ESPTab:CreateSection("Visual Helpers")
 ESPTab:CreateToggle({Name = "Player ESP", CurrentValue = _G.Settings.ESP["Player ESP"], Callback = function(v) 
@@ -2587,7 +2604,7 @@ ESPTab:CreateToggle({Name = "Island ESP", CurrentValue = false, Callback = funct
 end}, "IslandESP")
 ESPTab:CreateToggle({Name = "Raid ESP", CurrentValue = _G.Settings.ESP["Raid ESP"], Callback = function(v) _G.Settings.ESP["Raid ESP"] = v end}, "RaidESP")
 
-local BossTab = Window:CreateTab({Name = "Boss", Icon = GetIcon("Raid"), ImageSource = "Custom", ShowTitle = true})
+local BossTab = Window:CreateTab({Name = "Boss", Icon = GetIcon("Raid"), ImageSource = "Material", ShowTitle = true})
 task.wait(0.1)
 BossTab:CreateSection("Boss Farm")
 
@@ -2629,7 +2646,7 @@ BossTab:CreateToggle({
     end
 }, "AutoFarmAllBosses")
 
-local TravelTab = Window:CreateTab({Name = "Travel", Icon = GetIcon("Travel"), ImageSource = "Custom", ShowTitle = true})
+local TravelTab = Window:CreateTab({Name = "Travel", Icon = GetIcon("Travel"), ImageSource = "Material", ShowTitle = true})
 task.wait(0.1)
 TravelTab:CreateSection("World Travel")
 TravelTab:CreateButton({Name = "Travel to Sea 1", Callback = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelMain") end})
@@ -2841,7 +2858,7 @@ task.spawn(function()
     end
 end)
 
-local SettingsTab = Window:CreateTab({Name = "Settings", Icon = GetIcon("Settings"), ImageSource = "Custom", ShowTitle = true})
+local SettingsTab = Window:CreateTab({Name = "Settings", Icon = GetIcon("Settings"), ImageSource = "Material", ShowTitle = true})
 task.wait(0.1)
 SettingsTab:CreateSection("Utilities")
 SettingsTab:CreateButton({Name = "Server Hop", Callback = function() ServerHop() end})
