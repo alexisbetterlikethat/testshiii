@@ -139,6 +139,10 @@ local World2 = PlaceId == 4442272183
 local World3 = PlaceId == 7449423635
 local CurrentWorld = (World1 and 1) or (World2 and 2) or (World3 and 3) or 1
 
+-- Environment fallbacks
+local request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (function() return nil end)
+local sethiddenproperty = sethiddenproperty or (syn and syn.sethiddenproperty) or (function() end)
+
 -- Initialize EnemySpawns (Redz Logic - Continuous Update)
 task.spawn(function()
     while task.wait(5) do
@@ -190,186 +194,6 @@ task.spawn(function()
         end
     end
 end)
-
-local function CheckSea(reqWorld)
-    if reqWorld == 1 and World1 then return true end
-    if reqWorld == 2 and World2 then return true end
-    if reqWorld == 3 and World3 then return true end
-    return false
-end
-
-local fireclickdetectorFn = rawget(_G, "fireclickdetector")
-local firetouchinterestFn = rawget(_G, "firetouchinterest")
-local activeTween
-
-local TabIcons = {
-    Default = "6031097225",
-    Update = "6034308946",
-    Dashboard = "6022668883",
-    Main = "6031068423",
-    Stats = "6023565892",
-    Shop = "6031265970",
-    Materials = "6035056487",
-    Bones = "6023565892",
-    Raid = "6034848746",
-    Travel = "6034684930",
-    Sea = "6023426906",
-    ESP = "6031260793",
-    Settings = "6031280882",
-    Fruit = "6034744034"
-}
-
-local function GetIcon(name)
-    local id = TabIcons[name] or TabIcons.Default
-    return tostring(id)
-end
-
-local lastHopAttempt = 0
-local function TeleportToServer(preferLowPop)
-    if os.clock() - lastHopAttempt < 8 then return end
-    lastHopAttempt = os.clock()
-    task.spawn(function()
-        local placeId = game.PlaceId
-        local cursor
-        for _ = 1, 5 do
-            local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId)
-            if cursor then
-                url = url .. "&cursor=" .. cursor
-            end
-            local success, response = pcall(function()
-                return HttpService:JSONDecode(game:HttpGet(url))
-            end)
-            if not success or type(response) ~= "table" or type(response.data) ~= "table" then
-                break
-            end
-            local servers = response.data
-            if preferLowPop then
-                table.sort(servers, function(a, b)
-                    return (a.playing or math.huge) < (b.playing or math.huge)
-                end)
-            end
-            for _, server in ipairs(servers) do
-                if server.id ~= game.JobId and server.playing < server.maxPlayers then
-                    TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
-                    return
-                end
-            end
-            cursor = response.nextPageCursor
-            if not cursor then
-                break
-            end
-        end
-    end)
-end
-
-local function AutoChooseTeam()
-    if not _G.Settings.Teams["Auto Select Team"] then return end
-    task.spawn(function()
-        while not LocalPlayer.Team do
-            local preferred = _G.Settings.Teams["Preferred Team"]
-            pcall(function()
-                ReplicatedStorage.Remotes.CommF_:InvokeServer("SetTeam", preferred)
-            end)
-            local gui = LocalPlayer:FindFirstChild("PlayerGui")
-            if gui then
-                local chooseTeam = gui:FindFirstChild("ChooseTeam", true)
-                if chooseTeam and chooseTeam.Visible then
-                    for _, button in ipairs(chooseTeam:GetDescendants()) do
-                        if button:IsA("TextButton") and string.find(button.Name, preferred) then
-                            pcall(function()
-                                button:Activate()
-                            end)
-                        end
-                    end
-                end
-            end
-            task.wait(1)
-        end
-    end)
-end
-
-AutoChooseTeam()
-
--- Anti-Cheat Bypass
-local function BypassAntiCheat()
-    local function DisableRemote(remoteName)
-        local remote = ReplicatedStorage:FindFirstChild(remoteName)
-        if remote then
-            if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-                remote.Name = "DisabledRemote_" .. remoteName
-            end
-        end
-    end
-    DisableRemote("Adonis_Client") 
-    DisableRemote("Adonis_UI")
-    
-    RunService.Stepped:Connect(function()
-        if LocalPlayer.Character then
-            for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
-                if v:IsA("BasePart") and v.CanCollide then
-                    v.CanCollide = false
-                end
-            end
-        end
-    end)
-end
-task.spawn(BypassAntiCheat)
-
--- Webhook & Auto Hop Logic
-local function SendWebhook(title, description, color, fields)
-    if not _G.Settings.Webhook["Enabled"] or _G.Settings.Webhook["Url"] == "" then return end
-    
-    local embed = {
-        ["title"] = title,
-        ["description"] = description,
-        ["color"] = color or 65280,
-        ["footer"] = {
-            ["text"] = "Aero Hub - " .. os.date("%X")
-        }
-    }
-
-    if fields and type(fields) == "table" then
-        embed["fields"] = fields
-    end
-    
-    local data = {
-        ["embeds"] = {embed}
-    }
-    
-    local jsonData = HttpService:JSONEncode(data)
-    request({
-        Url = _G.Settings.Webhook["Url"],
-        Method = "POST",
-        Headers = {["Content-Type"] = "application/json"},
-        Body = jsonData
-    })
-end
-
-local lastHopCheck = os.clock()
-task.spawn(function()
-    while task.wait(60) do
-        if _G.Settings.AntiCheat["Auto Hop"] then
-            local elapsedMinutes = (os.clock() - lastHopCheck) / 60
-            if elapsedMinutes >= (_G.Settings.AntiCheat["Hop Timer"] or 30) then
-                SendWebhook("Anti-Cheat Bypass", "Auto hopping to a new server...", 16776960)
-                TeleportToServer(true)
-                lastHopCheck = os.clock()
-            end
-        else
-            lastHopCheck = os.clock()
-        end
-    end
-end)
-
--- Helper Functions
-local function EquipWeapon(toolName)
-    local Backpack = LocalPlayer.Backpack
-    local Character = LocalPlayer.Character
-    if Character and Character:FindFirstChild(toolName) then return end
-    if Backpack and Backpack:FindFirstChild(toolName) then
-        Character.Humanoid:EquipTool(Backpack[toolName])
-    end
-end
 
 local function GetWeaponByType(type)
     local Backpack = LocalPlayer.Backpack
@@ -1726,218 +1550,124 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- Auto Farm Level (Redz Logic - Re-implemented)
-local StuckCounter = 0
-local LastTarget = nil
-local LastHP = 0
-local BlacklistedEnemies = {}
-
 local function normalizeMobName(name)
     if type(name) ~= "string" then return "" end
-    -- Strip level brackets like "[Lv. 5]" and trim whitespace for reliable matching
-    local cleaned = name:gsub("%[Lv%.%s*%d+%]", ""):gsub("%s+", " ")
+    local cleaned = name:gsub("%[Lv%.%s*%d+%]", ""):gsub("Lv%.?%s*%d+", ""):gsub("[%[%]]", "")
+    cleaned = cleaned:gsub("%s+", " ")
     return cleaned:match("^%s*(.-)%s*$") or cleaned
 end
 
 local function mobNameMatches(enemyName, targetName)
-    if not enemyName or not targetName then return false end
     return normalizeMobName(enemyName):lower() == normalizeMobName(targetName):lower()
 end
 
-task.spawn(function()
-    while task.wait() do
-        if _G.Settings.Main["Auto Farm Level"] and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            if _G.Settings.Main["Auto Farm Chest"] then
-                -- Pause Auto Farm Level if Chest Farm is active
-            else
-                pcall(function()
-                    local level = LocalPlayer.Data.Level.Value
-                    local questData = GetQuestData(level)
-                    if not questData then 
-                        warn("Aero Hub: No quest data found for level " .. tostring(level))
-                        return 
-                    end
-                    
-                    local questGui = LocalPlayer.PlayerGui:FindFirstChild("Main") and LocalPlayer.PlayerGui.Main:FindFirstChild("Quest")
-                    local hasQuest = questGui and questGui.Visible and (string.find(questGui.Container.QuestTitle.Title.Text, questData.Mob) or string.find(questGui.Container.QuestTitle.Title.Text, "Boss"))
-                    
-                    if not hasQuest then
-                        _G.CurrentTarget = nil -- Clear target when getting quest
-                        BlacklistedEnemies = {} -- Reset blacklist on new quest
-                        if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
-                        -- Abandon wrong quest
-                        if questGui and questGui.Visible then
-                            _G.TargetCFrame = nil -- Stop moving
-                            ReplicatedStorage.Remotes.CommF_:InvokeServer("AbandonQuest")
-                            task.wait(0.5)
-                            return
-                        end
+local function GetQuestGui()
+    local main = LocalPlayer.PlayerGui:FindFirstChild("Main")
+    return main and main:FindFirstChild("Quest")
+end
 
-                        -- Go to Quest Giver
-                        if (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude > 20 then
-                            TP2(questData.NPCPos)
-                        else
-                            _G.TargetCFrame = nil -- Stop moving
-                            ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", questData.Quest, questData.QuestNum)
-                            task.wait(0.5)
-                        end
-                    else
-                        -- Quest Active: Find and Kill
-                        local targetName = questData.Mob
-                        local enemy = _G.CurrentTarget
-                        
-                        -- Validate existing target
-                        if enemy then
-                            if not enemy.Parent or not enemy:FindFirstChild("Humanoid") or enemy.Humanoid.Health <= 0 or BlacklistedEnemies[enemy] or not mobNameMatches(enemy.Name, targetName) then
-                                enemy = nil
-                                _G.CurrentTarget = nil
-                            end
-                        end
-                        
-                        -- Find closest living enemy (ignoring blacklisted) if no valid target
-                        if not enemy and workspace:FindFirstChild("Enemies") then
-                            local potentialEnemies = {}
-                            for _, v in pairs(workspace.Enemies:GetChildren()) do
-                                if mobNameMatches(v.Name, targetName) and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and v:FindFirstChild("HumanoidRootPart") then
-                                    if not BlacklistedEnemies[v] then
-                                        if not enemy or (LocalPlayer.Character.HumanoidRootPart.Position - v.HumanoidRootPart.Position).Magnitude < (LocalPlayer.Character.HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude then
-                                            enemy = v
-                                        end
-                                    else
-                                        table.insert(potentialEnemies, v)
-                                    end
-                                end
-                            end
-                            
-                            -- If no valid enemies found but we have blacklisted ones, retry the closest blacklisted one
-                            if not enemy and #potentialEnemies > 0 then
-                                BlacklistedEnemies = {} -- Reset blacklist
-                                enemy = potentialEnemies[1] -- Just pick one to retry
-                            end
-                        end
-                        
-                        if enemy and enemy:FindFirstChild("HumanoidRootPart") then
-                            -- Stuck/Unkillable Detection
-                            if enemy == LastTarget then
-                                if enemy.Humanoid.Health >= LastHP then
-                                    StuckCounter = StuckCounter + 1
-                                else
-                                    StuckCounter = 0 -- Reset if damage dealt
-                                    LastHP = enemy.Humanoid.Health
-                                end
-                            else
-                                LastTarget = enemy
-                                LastHP = enemy.Humanoid.Health
-                                StuckCounter = 0
-                            end
+local function HasQuestForMob(mob)
+    local questGui = GetQuestGui()
+    if not questGui or not questGui.Visible then return false end
+    local title = questGui.Container.QuestTitle.Title.Text
+    return title and string.find(title, mob)
+end
 
-                            -- If stuck for ~25 seconds (approx 500 ticks at wait())
-                            if StuckCounter > 500 then 
-                                BlacklistedEnemies[enemy] = true
-                                _G.CurrentTarget = nil
-                                StuckCounter = 0
-                                return -- Skip this frame to find new target
-                            end
-
-                            -- Set Global Target for Locking Loop
-                            _G.CurrentTarget = enemy
-
-                            -- Force Enable Fast Attack
-                            _G.Settings.Configs["Fast Attack"] = true
-
-                            -- Smart Positioning: World Space + Ceiling Check
-                            -- Increased to 25 studs to avoid enemy attacks
-                            local targetPos = enemy.HumanoidRootPart.Position + Vector3.new(0, 25, 0)
-                            
-                            -- Removed Wiggle/Orbit logic to prevent spinning
-                            
-                            -- Raycast to check for ceilings/walls above enemy
-                            local rayOrigin = enemy.HumanoidRootPart.Position
-                            local rayDirection = Vector3.new(0, 10, 0)
-                            local rayParams = RaycastParams.new()
-                            rayParams.FilterDescendantsInstances = {LocalPlayer.Character, workspace.Enemies, workspace:FindFirstChild("EnemySpawns")}
-                            rayParams.FilterType = Enum.RaycastFilterType.Exclude
-                            
-                            local rayResult = workspace:Raycast(rayOrigin, rayDirection, rayParams)
-                            if rayResult then
-                                -- If blocked, position slightly below the hit point
-                                targetPos = rayResult.Position - Vector3.new(0, 2.5, 0)
-                            end
-                            
-                            -- Wall Check: Nudge away from walls
-                            local checkDist = 2 -- Reduced to 2 to prevent being pushed too far
-                            local dirs = {Vector3.new(1,0,0), Vector3.new(-1,0,0), Vector3.new(0,0,1), Vector3.new(0,0,-1)}
-                            for _, d in ipairs(dirs) do
-                                local wallRay = workspace:Raycast(targetPos, d * checkDist, rayParams)
-                                if wallRay then
-                                    -- Move away from wall
-                                    targetPos = targetPos - (d * (checkDist - wallRay.Distance + 0.5))
-                                end
-                            end
-
-                            -- Look at Enemy
-                            local farmPos = CFrame.new(targetPos, enemy.HumanoidRootPart.Position)
-                            
-                            -- Distance Check for Attack Mode
-                            local myPos = LocalPlayer.Character.HumanoidRootPart.Position
-                            local distToPos = (myPos - targetPos).Magnitude
-                            
-                            if distToPos > 10 then
-                                -- Too far, Tween to position
-                                TP2(farmPos)
-                            else
-                                -- Close enough, Stop Tween and Attack
-                                if _G.ActiveTween then _G.ActiveTween:Cancel() end
-                                if _G.TweenConnection then _G.TweenConnection:Disconnect() end
-                                
-                                -- Unanchor and Float
-                                LocalPlayer.Character.HumanoidRootPart.Anchored = false
-                                LocalPlayer.Character.HumanoidRootPart.CFrame = farmPos -- Snap to exact pos
-                                LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
-                                LocalPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-                                
-                                if LocalPlayer.Character.Humanoid.PlatformStand then
-                                    LocalPlayer.Character.Humanoid.PlatformStand = false
-                                end
-                                
-                                -- Attack (Force Trigger)
-                                EquipPreferredWeapon()
-                                EnsureHaki()
-                                
-                                -- Debug: Print target info
-                                warn("Attacking: " .. enemy.Name .. " | Dist: " .. math.floor((enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude))
-                                
-                                -- 1. Fast Attack Call
-                                FastAttack:AttackNearest()
-                            end
-                        else
-                            -- No enemy found: Go to Spawn
-                            _G.CurrentTarget = nil
-                            if LocalPlayer.Character.HumanoidRootPart.Anchored then LocalPlayer.Character.HumanoidRootPart.Anchored = false end
-                            
-                            local spawns = GetMobSpawns(targetName)
-                            if #spawns > 0 then
-                                -- Cycle spawns if needed, or just go to the first one
-                                local targetSpawn = spawns[1]
-                                TP2(targetSpawn * CFrame.new(0, 30, 0))
-                            else
-                                -- Fallback: Hover at Quest Giver
-                                TP2(questData.NPCPos * CFrame.new(0, 30, 0))
-                            end
-                        end
-                    end
-                end)
+local function FindTargetMob(mob)
+    if not workspace:FindFirstChild("Enemies") then return nil end
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    local best, bestDist
+    for _, enemy in ipairs(workspace.Enemies:GetChildren()) do
+        if mobNameMatches(enemy.Name, mob) then
+            local hum = enemy:FindFirstChildOfClass("Humanoid")
+            local hrp = enemy:FindFirstChild("HumanoidRootPart")
+            if hum and hum.Health > 0 and hrp then
+                local d = (hrp.Position - root.Position).Magnitude
+                if not best or d < bestDist then
+                    best = enemy
+                    bestDist = d
+                end
             end
         end
-        -- Reset Farm Position if disabled
-        if not _G.Settings.Main["Auto Farm Level"] then
-            _G.TargetCFrame = nil
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                LocalPlayer.Character.Humanoid.PlatformStand = false
+    end
+    return best
+end
+
+local function BringSameMobs(target)
+    if not target or not workspace:FindFirstChild("Enemies") then return end
+    for _, other in ipairs(workspace.Enemies:GetChildren()) do
+        if other ~= target and mobNameMatches(other.Name, target.Name) then
+            local hrp = other:FindFirstChild("HumanoidRootPart")
+            local hum = other:FindFirstChildOfClass("Humanoid")
+            if hrp and hum and hum.Health > 0 then
+                if (hrp.Position - target.HumanoidRootPart.Position).Magnitude < 300 then
+                    hrp.CFrame = target.HumanoidRootPart.CFrame
+                    hrp.CanCollide = false
+                    hrp.Size = Vector3.new(5, 5, 5)
+                    hum.WalkSpeed = 0
+                    hum.JumpPower = 0
+                    hum.PlatformStand = true
+                end
             end
+        end
+    end
+end
+
+task.spawn(function()
+    while task.wait(0.1) do
+        if not _G.Settings.Main["Auto Farm Level"] then
+            _G.CurrentTarget = nil
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                 LocalPlayer.Character.HumanoidRootPart.Anchored = false
             end
+            continue
         end
+
+        if _G.Settings.Main["Auto Farm Chest"] then
+            continue
+        end
+
+        pcall(function()
+            local level = LocalPlayer.Data.Level.Value
+            local questData = GetQuestData(level)
+            if not questData then return end
+
+            if not HasQuestForMob(questData.Mob) then
+                _G.CurrentTarget = nil
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("AbandonQuest")
+                if (LocalPlayer.Character.HumanoidRootPart.Position - questData.NPCPos.Position).Magnitude > 12 then
+                    TP2(questData.NPCPos)
+                else
+                    ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", questData.Quest, questData.QuestNum)
+                end
+                return
+            end
+
+            local target = FindTargetMob(questData.Mob)
+            if not target then
+                local spawns = GetMobSpawns(questData.Mob)
+                if #spawns > 0 then
+                    TP2(spawns[1] * CFrame.new(0, 30, 0))
+                else
+                    TP2(questData.NPCPos * CFrame.new(0, 30, 0))
+                end
+                return
+            end
+
+            _G.CurrentTarget = target
+            AnchorEnemy(target)
+            BringSameMobs(target)
+
+            local hrp = target:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+            local farmPos = hrp.CFrame * CFrame.new(0, 25, 0)
+            TP2(farmPos)
+
+            EquipPreferredWeapon()
+            EnsureHaki()
+            FastAttack:AttackNearest()
+        end)
     end
 end)
 
