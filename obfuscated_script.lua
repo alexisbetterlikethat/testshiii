@@ -953,7 +953,7 @@ function FastAttack:AttackNearest()
         if not folder then return end
         for _, enemy in pairs(folder:GetChildren()) do
             if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
-                local hitPart = enemy:FindFirstChild("Head") or enemy:FindFirstChild("HumanoidRootPart")
+                local hitPart = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Head")
                 if hitPart then
                     local dist = (hitPart.Position - myRoot.Position).Magnitude
                     if dist < 100 then
@@ -982,6 +982,9 @@ function FastAttack:AttackNearest()
         local tool = character:FindFirstChildOfClass("Tool")
         if tool then
             tool:Activate()
+            -- Backup Click
+            game:GetService("VirtualUser"):CaptureController()
+            game:GetService("VirtualUser"):Button1Down(Vector2.new(1280, 672))
         end
     end
 end
@@ -1626,14 +1629,11 @@ local function BringMob(target)
             if distance < 300 then -- Reduced radius slightly
                 enemy.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame
                 enemy.HumanoidRootPart.CanCollide = false
-                enemy.HumanoidRootPart.Size = Vector3.new(2, 2, 2)
+                enemy.HumanoidRootPart.Size = Vector3.new(5, 5, 5) -- Bigger hitbox
                 enemy.Humanoid.WalkSpeed = 0
                 enemy.Humanoid.JumpPower = 0
                 enemy.Humanoid.PlatformStand = true
-                if enemy.Humanoid:FindFirstChild("Animator") then
-                    enemy.Humanoid.Animator:Destroy()
-                end
-                enemy.Humanoid:ChangeState(11)
+                -- Removed ChangeState(11) and Animator destruction to prevent desync
                 if enemy:FindFirstChild("Head") then enemy.Head.CanCollide = false end
                 count = count + 1
             end
@@ -1819,8 +1819,8 @@ task.spawn(function()
                             _G.Settings.Configs["Fast Attack"] = true
 
                             -- Smart Positioning: World Space + Ceiling Check
-                            -- Lowered to 7 studs to ensure hits connect
-                            local targetPos = enemy.HumanoidRootPart.Position + Vector3.new(0, 7, 0)
+                            -- Lowered to 5 studs to ensure hits connect
+                            local targetPos = enemy.HumanoidRootPart.Position + Vector3.new(0, 5, 0)
                             
                             -- Wiggle if stuck to try and find a hitting angle
                             if StuckCounter > 50 then
