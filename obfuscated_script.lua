@@ -491,10 +491,8 @@ RunService.RenderStepped:Connect(updateESP)
 local Window = Luna:CreateWindow({
     Name = "Aero Rivals",
     Subtitle = "Aero Theme",
-    LogoID = "6031097225",
-    LoadingEnabled = true,
-    LoadingTitle = "Aero Rivals",
-    LoadingSubtitle = "Loading...",
+    LogoID = nil,
+    LoadingEnabled = false,
     ConfigSettings = {RootFolder = nil, ConfigFolder = "AeroRivals"},
     KeySystem = false,
     Theme = {
