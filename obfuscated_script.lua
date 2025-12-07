@@ -156,13 +156,19 @@ end
 -- FOV Circle
 local DrawingLib = (typeof(Drawing) == "table" and Drawing) or (getgenv and getgenv().Drawing) or nil
 local Drawing = DrawingLib
-local FOVCircle = Drawing and Drawing.new("Circle")
-if FOVCircle then
-    FOVCircle.Visible = true
-    FOVCircle.Filled = false
-    FOVCircle.Thickness = 2
-    FOVCircle.Color = Color3.fromRGB(0, 200, 255)
-    FOVCircle.Radius = Settings.Combat.FOVRadius
+local FOVCircle
+if Drawing then
+    local ok, obj = pcall(function() return Drawing.new("Circle") end)
+    if ok and obj then
+        FOVCircle = obj
+        FOVCircle.Visible = true
+        FOVCircle.Filled = false
+        FOVCircle.Thickness = 2
+        FOVCircle.Color = Color3.fromRGB(0, 200, 255)
+        FOVCircle.Radius = Settings.Combat.FOVRadius
+    else
+        FOVCircle = nil
+    end
 end
 
 local function updateFOVPosition()
@@ -211,31 +217,34 @@ end
 
 -- Auto Aim (camera assist)
 RunService.RenderStepped:Connect(function(dt)
-    if FOVCircle then
-        FOVCircle.Visible = Settings.Combat.ShowFOV
-        local profile = getWeaponProfile()
-        FOVCircle.Radius = profile.FOV or Settings.Combat.FOVRadius
-        updateFOVPosition()
-    end
-
-    if Settings.Combat.AutoAim then
-        local target = getClosestTarget()
-        if target and isAlive(target) then
-            local root = target.Character.HumanoidRootPart
-            local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
-            if onScreen then
-                local aimPos2D = UserInputService.TouchEnabled and Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2) or Vector2.new(Mouse.X, Mouse.Y)
-                local dist2D = (Vector2.new(screenPos.X, screenPos.Y) - aimPos2D).Magnitude
-                if dist2D > Settings.Combat.AutoAimFOV then
-                    return
-                end
-            end
-            local direction = (root.Position - Camera.CFrame.Position).Unit
-            local current = Camera.CFrame.LookVector
-            local lerpDir = current:Lerp(direction, math.clamp(Settings.Combat.AimStrength * dt * 60, 0, 1))
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + lerpDir)
+    local ok, err = pcall(function()
+        if FOVCircle then
+            FOVCircle.Visible = Settings.Combat.ShowFOV
+            local profile = getWeaponProfile()
+            FOVCircle.Radius = profile.FOV or Settings.Combat.FOVRadius
+            updateFOVPosition()
         end
-    end
+
+        if Settings.Combat.AutoAim then
+            local target = getClosestTarget()
+            if target and isAlive(target) then
+                local root = target.Character.HumanoidRootPart
+                local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+                if onScreen then
+                    local aimPos2D = UserInputService.TouchEnabled and Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2) or Vector2.new(Mouse.X, Mouse.Y)
+                    local dist2D = (Vector2.new(screenPos.X, screenPos.Y) - aimPos2D).Magnitude
+                    if dist2D > Settings.Combat.AutoAimFOV then
+                        return
+                    end
+                end
+                local direction = (root.Position - Camera.CFrame.Position).Unit
+                local current = Camera.CFrame.LookVector
+                local lerpDir = current:Lerp(direction, math.clamp(Settings.Combat.AimStrength * dt * 60, 0, 1))
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + lerpDir)
+            end
+        end
+    end)
+    if not ok then warn("Aero Rivals RenderStepped:", err) end
 end)
 
 -- Silent Aim hook (Mouse.Hit redirect) - lightweight, works for ray-based projectiles
