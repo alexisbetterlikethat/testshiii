@@ -34,7 +34,7 @@ _G.Settings = {
         ["Auto Farm Level"] = false,
         ["Fast Auto Farm Level"] = false,
         ["Distance Mob Aura"] = 1000,
-        ["Mob Aura"] = fwdqalse,
+        ["Mob Aura"] = false,
         ["Auto Farm Chest"] = false,
         ["Chest Hop When Dry"] = false,
         ["Chest Hop Delay"] = 10,
@@ -836,7 +836,7 @@ function TweenX(target)
     local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target)
     if not targetCFrame then return end
 
-    -- 1. Teleporter Check (Disabled for stability - relying on Fly/Tween)
+    -- 1. Teleporter Check (Disabled for stability)
     -- local teleporter = CheckNearestTeleporter(targetCFrame)
     -- if teleporter then
     --     requestEntrance(teleporter)
@@ -846,68 +846,50 @@ function TweenX(target)
     -- 2. Distance Check
     local dist = (root.Position - targetCFrame.Position).Magnitude
     
-    -- 3. Setup PartTele (Redz Method - Smoothed)
-    if not LocalPlayer.Character:FindFirstChild("PartTele") then
-        local p = Instance.new("Part", LocalPlayer.Character)
-        p.Name = "PartTele"
-        p.Size = Vector3.new(1,1,1)
-        p.Anchored = true
-        p.CanCollide = false
-        p.Transparency = 1
-        p.CFrame = root.CFrame
-    end
-    local partTele = LocalPlayer.Character.PartTele
-    
-    -- 4. Tween the Part
-    local speed = 350
-    if dist < 200 then speed = 500 end
+    -- 3. Simple Anchored Tween (Prevents Falling)
+    local speed = 300
+    if dist < 200 then speed = 400 end
     
     local info = TweenInfo.new(dist/speed, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(partTele, info, {CFrame = targetCFrame})
-    tween:Play()
     
-    -- 5. Bind HRP to Part (Smoother than GetPropertyChangedSignal)
+    -- Cancel previous
+    if _G.ActiveTween then _G.ActiveTween:Cancel() end
     if _G.TweenConnection then _G.TweenConnection:Disconnect() end
     
-    -- Force Sit = false to prevent weird physics states
-    local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-    if hum then 
-        hum.Sit = false 
-        hum.PlatformStand = true -- Enable PlatformStand to prevent flipping
-    end
-
+    -- Anchor to prevent falling
+    root.Anchored = true
+    
+    local tween = TweenService:Create(root, info, {CFrame = targetCFrame})
+    _G.ActiveTween = tween
+    
+    -- Physics State Loop
     _G.TweenConnection = RunService.RenderStepped:Connect(function()
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
-            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-            if hum then
-                hum.Sit = false
-                hum.PlatformStand = true -- Enforce PlatformStand
-            end
-
-            -- Force the HRP to the PartTele's position exactly
-            LocalPlayer.Character.HumanoidRootPart.CFrame = LocalPlayer.Character.PartTele.CFrame
-            
-            -- Reset velocity to prevent physics interference (gravity pulling down)
-            LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
-            LocalPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero 
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.PlatformStand = true
+            LocalPlayer.Character.Humanoid.Sit = false
             
             -- Noclip
-            for _, v in pairs(LocalPlayer.Character:GetChildren()) do
-                if v:IsA("BasePart") then v.CanCollide = false end
+            for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+                if v:IsA("BasePart") and v.CanCollide then
+                    v.CanCollide = false
+                end
             end
         else
             if _G.TweenConnection then _G.TweenConnection:Disconnect() end
         end
     end)
     
+    tween:Play()
+    
+    -- Wait for completion or cancellation
     tween.Completed:Connect(function()
         if _G.TweenConnection then _G.TweenConnection:Disconnect() end
-        if partTele then partTele:Destroy() end
-        -- Restore collision and state
-        if LocalPlayer.Character then
-             local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-             if hum then hum.PlatformStand = false end
-             LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.Anchored = false
+            LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
+            if LocalPlayer.Character:FindFirstChild("Humanoid") then
+                LocalPlayer.Character.Humanoid.PlatformStand = false
+            end
         end
     end)
 end
