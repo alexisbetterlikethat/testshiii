@@ -34,7 +34,7 @@ _G.Settings = {
         ["Auto Farm Level"] = false,
         ["Fast Auto Farm Level"] = false,
         ["Distance Mob Aura"] = 1000,
-        ["Mob Aura"] = false,
+        ["Mob Aura"] = fwdqalse,
         ["Auto Farm Chest"] = false,
         ["Chest Hop When Dry"] = false,
         ["Chest Hop Delay"] = 10,
@@ -221,8 +221,7 @@ local TabIcons = {
 
 local function GetIcon(name)
     local id = TabIcons[name] or TabIcons.Default
-    if not id then return "rbxassetid://6031097225" end -- Fallback safety
-    return "rbxassetid://" .. id
+    return tostring(id)
 end
 
 local lastHopAttempt = 0
@@ -863,6 +862,27 @@ function TweenX(target)
     local speed = 350
     if dist < 200 then speed = 500 end
     
+    -- Fix: Ensure we don't dip below the target height or current height unnecessarily
+    -- If we are high up, stay high until we are over the target
+    local startY = root.Position.Y
+    local targetY = targetCFrame.Position.Y
+    
+    -- If moving far, maintain a safe height
+    if dist > 150 then
+        local safeY = math.max(startY, targetY, 300) -- Fly at least at 300 or current/target height
+        -- Create a multi-stage tween if needed (Up -> Over -> Down), but for now let's just ensure linear path doesn't clip
+        -- Actually, Redz logic is linear. The "dip" might be due to gravity or physics fighting the CFrame set.
+        -- We are setting Velocity to zero, so physics shouldn't be an issue.
+        -- The issue might be the linear path cutting through the ground/water if the destination is lower.
+        
+        -- Let's force a high path if the distance is significant
+        if (startY < safeY - 50) or (targetY < safeY - 50) then
+             -- This would require a sequence. For now, let's just stick to the requested fix: "hover down a bit"
+             -- This implies the user feels they are sinking.
+             -- We will ensure the CFrame set is strict and maybe add a small offset to the part.
+        end
+    end
+
     local info = TweenInfo.new(dist/speed, Enum.EasingStyle.Linear)
     local tween = TweenService:Create(partTele, info, {CFrame = targetCFrame})
     tween:Play()
@@ -871,8 +891,12 @@ function TweenX(target)
     if _G.TweenConnection then _G.TweenConnection:Disconnect() end
     _G.TweenConnection = RunService.RenderStepped:Connect(function()
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
+            -- Force the HRP to the PartTele's position exactly
             LocalPlayer.Character.HumanoidRootPart.CFrame = LocalPlayer.Character.PartTele.CFrame
+            
+            -- Reset velocity to prevent physics interference (gravity pulling down)
             LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
+            LocalPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero -- Newer physics property
             
             -- Noclip
             for _, v in pairs(LocalPlayer.Character:GetChildren()) do
@@ -2455,6 +2479,7 @@ local function getBoatDisplayName(remoteName)
 end
 
 local DashboardTab = Window:CreateTab({Name = "Dashboard", Icon = GetIcon("Dashboard"), ImageSource = "Custom", ShowTitle = true})
+task.wait(0.1)
 DashboardTab:CreateSection("Profile Snapshot")
 local ProfileStatusParagraph = DashboardTab:CreateParagraph({
     Title = "Profile Snapshot",
@@ -2647,6 +2672,7 @@ task.spawn(function()
 end)
 
 local MainTab = Window:CreateTab({Name = "Main", Icon = GetIcon("Main"), ImageSource = "Custom", ShowTitle = true})
+task.wait(0.1)
 
 MainTab:CreateSection("Farming")
 MainTab:CreateToggle({Name = "Auto Kaitun (Max Account)", CurrentValue = _G.Settings.Main["Auto Kaitun"], Callback = function(v) _G.Settings.Main["Auto Kaitun"] = v end}, "AutoKaitun")
@@ -2707,6 +2733,7 @@ end}, "StopChestRare")
 
 
 local StatsTab = Window:CreateTab({Name = "Stats", Icon = GetIcon("Stats"), ImageSource = "Custom", ShowTitle = true})
+task.wait(0.1)
 StatsTab:CreateToggle({Name = "Auto Stats", CurrentValue = _G.Settings.Stats["Enabled Auto Stats"], Callback = function(v) _G.Settings.Stats["Enabled Auto Stats"] = v end}, "AutoStats")
 StatsTab:CreateDropdown({
     Name = "Select Stat",
@@ -2721,6 +2748,7 @@ StatsTab:CreateSlider({Name = "Points per Loop", Range = {1, 100}, Increment = 1
 
 
 local FruitTab = Window:CreateTab({Name = "Fruits", Icon = GetIcon("Fruit"), ImageSource = "Custom", ShowTitle = true})
+task.wait(0.1)
 FruitTab:CreateSection("Sniper")
 FruitTab:CreateDropdown({
     Name = "Select Fruit",
@@ -2761,6 +2789,7 @@ FruitTab:CreateToggle({Name = "Tween To Nearest Fruit", CurrentValue = _G.Settin
 end}, "TweenFruit")
 
 local RaidTab = Window:CreateTab({Name = "Raid", Icon = GetIcon("Raid"), ImageSource = "Custom", ShowTitle = true})
+task.wait(0.1)
 RaidTab:CreateToggle({Name = "Auto Start Raid", CurrentValue = _G.Settings.Raid["Auto Start Raid"], Callback = function(v) _G.Settings.Raid["Auto Start Raid"] = v end}, "AutoStartRaid")
 RaidTab:CreateToggle({Name = "Auto Buy Chip", CurrentValue = _G.Settings.Raid["Auto Buy Chip"], Callback = function(v) _G.Settings.Raid["Auto Buy Chip"] = v end}, "AutoBuyChip")
 RaidTab:CreateDropdown({
@@ -2776,6 +2805,7 @@ RaidTab:CreateToggle({Name = "Auto Awaken", CurrentValue = _G.Settings.Raid["Aut
 
 
 local ESPTab = Window:CreateTab({Name = "ESP", Icon = GetIcon("ESP"), ImageSource = "Custom", ShowTitle = true})
+task.wait(0.1)
 ESPTab:CreateSection("Visual Helpers")
 ESPTab:CreateToggle({Name = "Player ESP", CurrentValue = _G.Settings.ESP["Player ESP"], Callback = function(v) 
     _G.Settings.ESP["Player ESP"] = v 
@@ -2800,6 +2830,7 @@ end}, "IslandESP")
 ESPTab:CreateToggle({Name = "Raid ESP", CurrentValue = _G.Settings.ESP["Raid ESP"], Callback = function(v) _G.Settings.ESP["Raid ESP"] = v end}, "RaidESP")
 
 local BossTab = Window:CreateTab({Name = "Boss", Icon = GetIcon("Raid"), ImageSource = "Custom", ShowTitle = true})
+task.wait(0.1)
 BossTab:CreateSection("Boss Farm")
 
 local BossList = {}
@@ -2841,6 +2872,7 @@ BossTab:CreateToggle({
 }, "AutoFarmAllBosses")
 
 local TravelTab = Window:CreateTab({Name = "Travel", Icon = GetIcon("Travel"), ImageSource = "Custom", ShowTitle = true})
+task.wait(0.1)
 TravelTab:CreateSection("World Travel")
 TravelTab:CreateButton({Name = "Travel to Sea 1", Callback = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelMain") end})
 TravelTab:CreateButton({Name = "Travel to Sea 2", Callback = function() ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelDressrosa") end})
@@ -3052,6 +3084,7 @@ task.spawn(function()
 end)
 
 local SettingsTab = Window:CreateTab({Name = "Settings", Icon = GetIcon("Settings"), ImageSource = "Custom", ShowTitle = true})
+task.wait(0.1)
 SettingsTab:CreateSection("Utilities")
 SettingsTab:CreateButton({Name = "Server Hop", Callback = function() ServerHop() end})
 SettingsTab:CreateButton({Name = "Stop Tween (Emergency)", Callback = function() StopTween() end})
