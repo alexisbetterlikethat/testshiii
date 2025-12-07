@@ -780,13 +780,15 @@ function TweenX(target)
     local finalDestination = targetCFrame
     local speed = 350 -- Studs per second
     
-    -- Safety Height Logic
-    if horizontalDist > 150 then
-        -- If far, fly high
-        local safeY = 350
-        if targetPos.Y > safeY then
-            safeY = targetPos.Y + 50
-        end
+    -- Safety Height Logic (Smoother Path: Up -> Over -> Down)
+    local safeY = 350
+    if targetPos.Y > safeY then safeY = targetPos.Y + 50 end
+
+    local isHigh = (currentPos.Y - targetPos.Y) > 50
+    local isFar = horizontalDist > 150
+    local isAbove = horizontalDist < 25
+
+    if isFar or (isHigh and not isAbove) then
         finalDestination = CFrame.new(targetPos.X, safeY, targetPos.Z)
     end
 
@@ -1379,15 +1381,21 @@ local function GetBestChest()
     local root = character and character:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
     local best, bestWeight = nil, -math.huge
+    
     local function consider(part)
         if part and part:IsA("BasePart") then
             if ChestBlacklist[part] then return end
-            local parent = part.Parent
+            
+            -- Check if disabled (claimed)
             local disabled = (part.GetAttribute and part:GetAttribute("IsDisabled"))
-            if not disabled and parent and parent.GetAttribute then
-                disabled = parent:GetAttribute("IsDisabled")
+            if not disabled and part.Parent and part.Parent.GetAttribute then
+                disabled = part.Parent:GetAttribute("IsDisabled")
             end
             if disabled then return end
+            
+            -- Check transparency (often used for claimed chests)
+            if part.Transparency >= 1 then return end
+
             local distance = (part.Position - root.Position).Magnitude
             local score = ScoreChest(part)
             local weight = score - (distance / 5000)
@@ -1397,17 +1405,36 @@ local function GetBestChest()
             end
         end
     end
+
+    -- 1. Tagged Chests
     for _, chest in ipairs(CollectionService:GetTagged("_ChestTagged")) do
         consider(chest)
     end
+
+    -- 2. ChestModels Folder
     local chestFolder = workspace:FindFirstChild("ChestModels")
     if chestFolder then
         for _, descendant in ipairs(chestFolder:GetDescendants()) do
-            if descendant:IsA("BasePart") and descendant.Name:lower():find("chest") then
+            if descendant:IsA("BasePart") and (descendant.Name:lower():find("chest") or descendant.Parent.Name:lower():find("chest")) then
                 consider(descendant)
             end
         end
     end
+
+    -- 3. Workspace Search (Fallback)
+    if not best then
+        for _, child in ipairs(workspace:GetChildren()) do
+            if child.Name:lower():find("chest") then
+                if child:IsA("BasePart") then
+                    consider(child)
+                elseif child:IsA("Model") then
+                    local part = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart")
+                    if part then consider(part) end
+                end
+            end
+        end
+    end
+
     return best
 end
 
