@@ -1825,14 +1825,10 @@ task.spawn(function()
                             _G.Settings.Configs["Fast Attack"] = true
 
                             -- Smart Positioning: World Space + Ceiling Check
-                            -- Lowered to 5 studs to ensure hits connect
-                            local targetPos = enemy.HumanoidRootPart.Position + Vector3.new(0, 5, 0)
+                            -- Increased to 25 studs to avoid enemy attacks
+                            local targetPos = enemy.HumanoidRootPart.Position + Vector3.new(0, 25, 0)
                             
-                            -- Wiggle if stuck to try and find a hitting angle
-                            if StuckCounter > 50 then
-                                local angle = (os.clock() * 5) % (math.pi * 2)
-                                targetPos = targetPos + Vector3.new(math.cos(angle) * 5, 0, math.sin(angle) * 5)
-                            end
+                            -- Removed Wiggle/Orbit logic to prevent spinning
                             
                             -- Raycast to check for ceilings/walls above enemy
                             local rayOrigin = enemy.HumanoidRootPart.Position
