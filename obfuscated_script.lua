@@ -836,12 +836,12 @@ function TweenX(target)
     local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target)
     if not targetCFrame then return end
 
-    -- 1. Teleporter Check
-    local teleporter = CheckNearestTeleporter(targetCFrame)
-    if teleporter then
-        requestEntrance(teleporter)
-        return
-    end
+    -- 1. Teleporter Check (Disabled for stability - relying on Fly/Tween)
+    -- local teleporter = CheckNearestTeleporter(targetCFrame)
+    -- if teleporter then
+    --     requestEntrance(teleporter)
+    --     return
+    -- end
 
     -- 2. Distance Check
     local dist = (root.Position - targetCFrame.Position).Magnitude
@@ -868,14 +868,28 @@ function TweenX(target)
     
     -- 5. Bind HRP to Part (Smoother than GetPropertyChangedSignal)
     if _G.TweenConnection then _G.TweenConnection:Disconnect() end
+    
+    -- Force Sit = false to prevent weird physics states
+    local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+    if hum then 
+        hum.Sit = false 
+        hum.PlatformStand = true -- Enable PlatformStand to prevent flipping
+    end
+
     _G.TweenConnection = RunService.RenderStepped:Connect(function()
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
+            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+            if hum then
+                hum.Sit = false
+                hum.PlatformStand = true -- Enforce PlatformStand
+            end
+
             -- Force the HRP to the PartTele's position exactly
             LocalPlayer.Character.HumanoidRootPart.CFrame = LocalPlayer.Character.PartTele.CFrame
             
             -- Reset velocity to prevent physics interference (gravity pulling down)
             LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
-            LocalPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero -- Newer physics property
+            LocalPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero 
             
             -- Noclip
             for _, v in pairs(LocalPlayer.Character:GetChildren()) do
@@ -889,6 +903,12 @@ function TweenX(target)
     tween.Completed:Connect(function()
         if _G.TweenConnection then _G.TweenConnection:Disconnect() end
         if partTele then partTele:Destroy() end
+        -- Restore collision and state
+        if LocalPlayer.Character then
+             local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+             if hum then hum.PlatformStand = false end
+             LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
+        end
     end)
 end
 
