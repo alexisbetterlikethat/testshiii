@@ -1726,6 +1726,18 @@ local LastTarget = nil
 local LastHP = 0
 local BlacklistedEnemies = {}
 
+local function normalizeMobName(name)
+    if type(name) ~= "string" then return "" end
+    -- Strip level brackets like "[Lv. 5]" and trim whitespace for reliable matching
+    local cleaned = name:gsub("%[Lv%.%s*%d+%]", ""):gsub("%s+", " ")
+    return cleaned:match("^%s*(.-)%s*$") or cleaned
+end
+
+local function mobNameMatches(enemyName, targetName)
+    if not enemyName or not targetName then return false end
+    return normalizeMobName(enemyName):lower() == normalizeMobName(targetName):lower()
+end
+
 task.spawn(function()
     while task.wait() do
         if _G.Settings.Main["Auto Farm Level"] and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -1770,7 +1782,7 @@ task.spawn(function()
                         
                         -- Validate existing target
                         if enemy then
-                            if not enemy.Parent or not enemy:FindFirstChild("Humanoid") or enemy.Humanoid.Health <= 0 or BlacklistedEnemies[enemy] or enemy.Name ~= targetName then
+                            if not enemy.Parent or not enemy:FindFirstChild("Humanoid") or enemy.Humanoid.Health <= 0 or BlacklistedEnemies[enemy] or not mobNameMatches(enemy.Name, targetName) then
                                 enemy = nil
                                 _G.CurrentTarget = nil
                             end
@@ -1780,7 +1792,7 @@ task.spawn(function()
                         if not enemy and workspace:FindFirstChild("Enemies") then
                             local potentialEnemies = {}
                             for _, v in pairs(workspace.Enemies:GetChildren()) do
-                                if v.Name == targetName and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and v:FindFirstChild("HumanoidRootPart") then
+                                if mobNameMatches(v.Name, targetName) and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and v:FindFirstChild("HumanoidRootPart") then
                                     if not BlacklistedEnemies[v] then
                                         if not enemy or (LocalPlayer.Character.HumanoidRootPart.Position - v.HumanoidRootPart.Position).Magnitude < (LocalPlayer.Character.HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude then
                                             enemy = v
