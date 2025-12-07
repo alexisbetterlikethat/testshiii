@@ -980,7 +980,7 @@ function FastAttack:AttackNearest()
 
     if #enemiesToHit > 0 and baseEnemy then
         -- Debug: Print hit info
-        -- warn("FastAttack Hit: " .. #enemiesToHit .. " enemies | Base: " .. baseEnemy.Parent.Name)
+        warn("FastAttack Hit: " .. #enemiesToHit .. " enemies | Base: " .. baseEnemy.Parent.Name)
         
         -- 1. Register Attack (Reset Cooldown)
         RegisterAttack:FireServer(0)
@@ -1887,7 +1887,7 @@ task.spawn(function()
                                 EnsureHaki()
                                 
                                 -- Debug: Print target info
-                                -- warn("Attacking: " .. enemy.Name .. " | Dist: " .. math.floor((enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude))
+                                warn("Attacking: " .. enemy.Name .. " | Dist: " .. math.floor((enemy.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude))
                                 
                                 -- 1. Fast Attack Call
                                 FastAttack:AttackNearest()
