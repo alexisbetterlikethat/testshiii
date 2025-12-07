@@ -1411,18 +1411,31 @@ local function GetBestChest()
         consider(chest)
     end
 
-    -- 2. ChestModels Folder
-    local chestFolder = workspace:FindFirstChild("ChestModels")
-    if chestFolder then
-        for _, descendant in ipairs(chestFolder:GetDescendants()) do
-            if descendant:IsA("BasePart") and (descendant.Name:lower():find("chest") or descendant.Parent.Name:lower():find("chest")) then
-                consider(descendant)
+    -- 2. ChestModels Folder (and variations)
+    for _, folderName in ipairs({"ChestModels", "Chests", "Chest"}) do
+        local folder = workspace:FindFirstChild(folderName)
+        if folder then
+            for _, descendant in ipairs(folder:GetDescendants()) do
+                if descendant:IsA("BasePart") and (descendant.Name:lower():find("chest") or descendant.Parent.Name:lower():find("chest")) then
+                    consider(descendant)
+                end
             end
         end
     end
 
-    -- 3. Workspace Search (Fallback)
+    -- 3. Workspace Search (Fallback - Expanded)
     if not best then
+        -- Check Map folder if exists
+        local map = workspace:FindFirstChild("Map")
+        if map then
+            for _, descendant in ipairs(map:GetDescendants()) do
+                if descendant:IsA("BasePart") and descendant.Name:lower():find("chest") then
+                    consider(descendant)
+                end
+            end
+        end
+        
+        -- Check Workspace Children
         for _, child in ipairs(workspace:GetChildren()) do
             if child.Name:lower():find("chest") then
                 if child:IsA("BasePart") then
@@ -1702,14 +1715,23 @@ task.spawn(function()
                         
                         -- Find closest living enemy (ignoring blacklisted) if no valid target
                         if not enemy and workspace:FindFirstChild("Enemies") then
+                            local potentialEnemies = {}
                             for _, v in pairs(workspace.Enemies:GetChildren()) do
                                 if v.Name == targetName and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and v:FindFirstChild("HumanoidRootPart") then
                                     if not BlacklistedEnemies[v] then
                                         if not enemy or (LocalPlayer.Character.HumanoidRootPart.Position - v.HumanoidRootPart.Position).Magnitude < (LocalPlayer.Character.HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude then
                                             enemy = v
                                         end
+                                    else
+                                        table.insert(potentialEnemies, v)
                                     end
                                 end
+                            end
+                            
+                            -- If no valid enemies found but we have blacklisted ones, retry the closest blacklisted one
+                            if not enemy and #potentialEnemies > 0 then
+                                BlacklistedEnemies = {} -- Reset blacklist
+                                enemy = potentialEnemies[1] -- Just pick one to retry
                             end
                         end
                         
@@ -1728,8 +1750,8 @@ task.spawn(function()
                                 StuckCounter = 0
                             end
 
-                            -- If stuck for ~10 seconds (approx 20 ticks at wait())
-                            if StuckCounter > 120 then -- Increased threshold since loop is fast
+                            -- If stuck for ~25 seconds (approx 500 ticks at wait())
+                            if StuckCounter > 500 then 
                                 BlacklistedEnemies[enemy] = true
                                 _G.CurrentTarget = nil
                                 StuckCounter = 0
@@ -1745,6 +1767,12 @@ task.spawn(function()
                             -- Smart Positioning: World Space + Ceiling Check
                             -- Lowered to 7 studs to ensure hits connect
                             local targetPos = enemy.HumanoidRootPart.Position + Vector3.new(0, 7, 0)
+                            
+                            -- Wiggle if stuck to try and find a hitting angle
+                            if StuckCounter > 50 then
+                                local angle = (os.clock() * 5) % (math.pi * 2)
+                                targetPos = targetPos + Vector3.new(math.cos(angle) * 5, 0, math.sin(angle) * 5)
+                            end
                             
                             -- Raycast to check for ceilings/walls above enemy
                             local rayOrigin = enemy.HumanoidRootPart.Position
@@ -1955,7 +1983,7 @@ task.spawn(function()
                 -- Stuck Check Logic
                 if chest then
                     if currentChest == chest then
-                        if os.clock() - chestStart > 5 then -- Reduced to 5 seconds
+                        if os.clock() - chestStart > 15 then -- Increased to 15 seconds for far chests
                             ChestBlacklist[chest] = true
                             currentChest = nil
                             return
@@ -2144,28 +2172,7 @@ task.spawn(function()
     end
 end)
 
--- Auto Farm Bone (Haunted Castle)
-task.spawn(function()
-    while task.wait() do
-        if _G.Settings.Main["Auto Farm Bone"] then
-            pcall(function()
-                local mobs = {"Reborn Skeleton", "Living Zombie", "Demonic Soul", "Posessed Mummy"}
-                local target = nil
-                for _, mobName in ipairs(mobs) do
-                    target = GetClosestEnemy(mobName)
-                    if target then break end
-                end
-                
-                if target then
-                    ApproachEnemy(target, 30)
-                else
-                    -- Teleport to Haunted Castle spawn area if no mobs found
-                    toTarget(CFrame.new(-9516.99, 172.02, 6078.47))
-                end
-            end)
-        end
-    end
-end)
+-- Auto Farm Bone (Haunted Castle) - REMOVED
 
 task.spawn(function()
     while task.wait(0.2) do
@@ -2193,39 +2200,13 @@ end)
 
 task.spawn(function()
     while task.wait(0.2) do
-        if _G.Settings.Materials["Auto Farm Material"] then
-            pcall(function()
-                local selection = _G.Settings.Materials["Select Material"]
-                local route = GetMaterialRoute(selection)
-                if not route then return end
-                local mobNames = {}
-                for _, entry in ipairs(route) do
-                    if entry.Mob then
-                        table.insert(mobNames, entry.Mob)
-                    end
-                end
-                local target = GetClosestEnemyFromList(mobNames)
-                if target and target:FindFirstChild("HumanoidRootPart") then
-                    ApproachEnemy(target, 25)
-                else
-                    local anchor = route[1]
-                    if anchor then
-                        if anchor.Spawn then SetSpawnPoint(anchor.Spawn) end
-                        if anchor.Position then toTarget(anchor.Position) end
-                    end
-                end
-            end)
-        end
+        -- Auto Farm Material Loop Removed
     end
 end)
 
 task.spawn(function()
     while task.wait(1) do
-        if _G.Settings.Bones["Auto Random Bone"] then
-            pcall(function()
-                ReplicatedStorage.Remotes.CommF_:InvokeServer("Bones", "Buy", 1, 1)
-            end)
-        end
+        -- Auto Random Bone Loop Removed
     end
 end)
 
@@ -2749,23 +2730,6 @@ FruitTab:CreateToggle({Name = "Tween To Nearest Fruit", CurrentValue = _G.Settin
     _G.Settings.Fruit["Tween To Fruit"] = v
     if v then _G.Settings.Fruit["Bring To Fruit"] = false end
 end}, "TweenFruit")
-
-local MaterialsTab = Window:CreateTab({Name = "Materials", Icon = GetIcon("Materials"), ImageSource = "Custom", ShowTitle = true})
-MaterialsTab:CreateSection("Material Farming")
-MaterialsTab:CreateToggle({Name = "Auto Farm Material", CurrentValue = _G.Settings.Materials["Auto Farm Material"], Callback = function(v) _G.Settings.Materials["Auto Farm Material"] = v end}, "AutoFarmMaterial")
-MaterialsTab:CreateDropdown({
-    Name = "Select Material",
-    Options = MaterialOptions,
-    CurrentOption = {_G.Settings.Materials["Select Material"]},
-    Callback = function(v)
-        _G.Settings.Materials["Select Material"] = unwrapOption(v)
-    end
-}, "SelectMaterial")
-
-local BonesTab = Window:CreateTab({Name = "Bones", Icon = GetIcon("Bones"), ImageSource = "Custom", ShowTitle = true})
-BonesTab:CreateSection("Haunted Castle")
-BonesTab:CreateToggle({Name = "Auto Farm Bone", CurrentValue = _G.Settings.Main["Auto Farm Bone"], Callback = function(v) _G.Settings.Main["Auto Farm Bone"] = v end}, "AutoFarmBone")
-BonesTab:CreateToggle({Name = "Auto Random Bone Surprise", CurrentValue = _G.Settings.Bones["Auto Random Bone"], Callback = function(v) _G.Settings.Bones["Auto Random Bone"] = v end}, "AutoRandomBone")
 
 local RaidTab = Window:CreateTab({Name = "Raid", Icon = GetIcon("Raid"), ImageSource = "Custom", ShowTitle = true})
 RaidTab:CreateToggle({Name = "Auto Start Raid", CurrentValue = _G.Settings.Raid["Auto Start Raid"], Callback = function(v) _G.Settings.Raid["Auto Start Raid"] = v end}, "AutoStartRaid")
