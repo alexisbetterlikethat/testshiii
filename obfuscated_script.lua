@@ -757,7 +757,7 @@ function requestEntrance(pos)
     task.wait(0.5)
 end
 
--- [[ Standard Tween Implementation (TweenX) - RedzHub Logic ]]
+-- [[ Standard Tween Implementation (TweenX) - Improved RedzHub Logic ]]
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 
@@ -817,65 +817,74 @@ local function CheckNearestTeleporter(p194)
     end
 end
 
-local IsTweening = false
-local function RedzTween(pu208)
-    local vu209 = game.Players.LocalPlayer
-    if vu209.Character and vu209.Character.Humanoid.Health > 0 and vu209.Character:FindFirstChild("HumanoidRootPart") then
-        if not pu208 then
-            return
-        end
-        local v210 = (pu208.Position - vu209.Character.HumanoidRootPart.Position).Magnitude
-        local v211 = CheckNearestTeleporter(pu208)
-        
-        if v211 then
-            requestEntrance(v211)
-            task.wait(0.2)
-            v210 = (pu208.Position - vu209.Character.HumanoidRootPart.Position).Magnitude
-        end
-        if not vu209.Character:FindFirstChild("PartTele") then
-            local vu212 = Instance.new("Part", vu209.Character)
-            vu212.Size = Vector3.new(10, 1, 10)
-            vu212.Name = "PartTele"
-            vu212.Anchored = true
-            vu212.Transparency = 1
-            vu212.CanCollide = false
-            vu212.CFrame = WaitHRP(vu209).CFrame
-            local v213 = vu212
-            vu212.GetPropertyChangedSignal(v213, "CFrame"):Connect(function()
-                if IsTweening then
-                    task.wait()
-                    if vu209.Character and vu209.Character:FindFirstChild("HumanoidRootPart") then
-                        local v214 = vu212.CFrame
-                        WaitHRP(vu209).CFrame = CFrame.new(v214.Position.X, pu208.Position.Y, v214.Position.Z)
-                    end
-                end
-            end)
-        end
-        IsTweening = true
-        local v215 = 350
-        if v210 <= 300 then
-            v215 = v215 * 4
-        end
-        local v216 = TweenService:Create(vu209.Character.PartTele, TweenInfo.new(v210 / v215, Enum.EasingStyle.Linear), {
-            ["CFrame"] = pu208
-        })
-        v216:Play()
-        v216.Completed:Connect(function(p217)
-            if p217 == Enum.PlaybackState.Completed then
-                if vu209.Character:FindFirstChild("PartTele") then
-                    vu209.Character.PartTele:Destroy()
-                end
-                IsTweening = false
-            end
-        end)
+local function StopTween()
+    if _G.TweenConnection then 
+        _G.TweenConnection:Disconnect() 
+        _G.TweenConnection = nil
+    end
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
+        LocalPlayer.Character.PartTele:Destroy()
     end
 end
 
 function TweenX(target)
+    if not LocalPlayer.Character then return end
+    local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
     local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target)
-    if targetCFrame then
-        RedzTween(targetCFrame)
+    if not targetCFrame then return end
+
+    -- 1. Teleporter Check
+    local teleporter = CheckNearestTeleporter(targetCFrame)
+    if teleporter then
+        requestEntrance(teleporter)
+        return
     end
+
+    -- 2. Distance Check
+    local dist = (root.Position - targetCFrame.Position).Magnitude
+    
+    -- 3. Setup PartTele (Redz Method - Smoothed)
+    if not LocalPlayer.Character:FindFirstChild("PartTele") then
+        local p = Instance.new("Part", LocalPlayer.Character)
+        p.Name = "PartTele"
+        p.Size = Vector3.new(1,1,1)
+        p.Anchored = true
+        p.CanCollide = false
+        p.Transparency = 1
+        p.CFrame = root.CFrame
+    end
+    local partTele = LocalPlayer.Character.PartTele
+    
+    -- 4. Tween the Part
+    local speed = 350
+    if dist < 200 then speed = 500 end
+    
+    local info = TweenInfo.new(dist/speed, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(partTele, info, {CFrame = targetCFrame})
+    tween:Play()
+    
+    -- 5. Bind HRP to Part (Smoother than GetPropertyChangedSignal)
+    if _G.TweenConnection then _G.TweenConnection:Disconnect() end
+    _G.TweenConnection = RunService.RenderStepped:Connect(function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("PartTele") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = LocalPlayer.Character.PartTele.CFrame
+            LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
+            
+            -- Noclip
+            for _, v in pairs(LocalPlayer.Character:GetChildren()) do
+                if v:IsA("BasePart") then v.CanCollide = false end
+            end
+        else
+            if _G.TweenConnection then _G.TweenConnection:Disconnect() end
+        end
+    end)
+    
+    tween.Completed:Connect(function()
+        if _G.TweenConnection then _G.TweenConnection:Disconnect() end
+        if partTele then partTele:Destroy() end
+    end)
 end
 
 -- Alias for compatibility
@@ -2012,131 +2021,6 @@ end)
 -- [RedzHub Logic Start]
 local CollectionService = game:GetService("CollectionService")
 local TweenService = game:GetService("TweenService")
-
-local function WaitHRP(p193)
-    if p193 then
-        return p193.Character:WaitForChild("HumanoidRootPart", 9)
-    end
-end
-
-local function CheckNearestTeleporter(p194)
-    local v195 = p194.Position
-    local v196 = math.huge
-    local v197 = nil
-    local v198 = game.PlaceId
-    local v199 = {}
-    local v200
-    if v198 == 2753915549 then
-        v200 = {
-            ["Sky3"] = Vector3.new(- 7894, 5547, - 380),
-            ["Sky3Exit"] = Vector3.new(- 4607, 874, - 1667),
-            ["UnderWater"] = Vector3.new(61163, 11, 1819),
-            ["UnderwaterExit"] = Vector3.new(4050, - 1, - 1814)
-        }
-    elseif v198 == 4442272183 then
-        v200 = {
-            ["Swan Mansion"] = Vector3.new(- 390, 332, 673),
-            ["Swan Room"] = Vector3.new(2285, 15, 905),
-            ["Cursed Ship"] = Vector3.new(923, 126, 32852),
-            ["Zombie Island"] = Vector3.new(- 6509, 83, - 133)
-        }
-    else
-        v200 = v198 == 7449423635 and {
-            ["Floating Turtle"] = Vector3.new(- 12462, 375, - 7552),
-            ["Hydra Island"] = Vector3.new(5662, 1013, - 335),
-            ["Mansion"] = Vector3.new(- 12462, 375, - 7552),
-            ["Castle"] = Vector3.new(- 5036, 315, - 3179),
-            ["Beautiful Pirate"] = Vector3.new(5319, 23, - 93),
-            ["Beautiful Room"] = Vector3.new(5314.58203, 22.5364361, - 125.942276, 1, 2.14762768e-8, - 1.99111154e-13, - 2.14762768e-8, 1, - 3.0510602e-8, 1.98455903e-13, 3.0510602e-8, 1),
-            ["Temple of Time"] = Vector3.new(28286, 14897, 103)
-        } or v199
-    end
-    local v201, v202, v203 = pairs(v200)
-    while true do
-        local v204
-        v203, v204 = v201(v202, v203)
-        if v203 == nil then
-            break
-        end
-        local v205 = (v204 - v195).Magnitude
-        if v205 < v196 then
-            v197 = v204
-            v196 = v205
-        end
-    end
-    if v196 <= (v195 - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude then
-        return v197
-    end
-end
-
-local function requestEntrance(p206)
-    game.ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", p206)
-    local v207 = game.Players.LocalPlayer.Character.HumanoidRootPart
-    v207.CFrame = v207.CFrame + Vector3.new(0, 50, 0)
-    task.wait(0.5)
-end
-
-local IsTweening = false
-local function RedzTween(pu208)
-    local vu209 = game.Players.LocalPlayer
-    if vu209.Character and vu209.Character.Humanoid.Health > 0 and vu209.Character:FindFirstChild("HumanoidRootPart") then
-        if not pu208 then
-            return
-        end
-        local v210 = (pu208.Position - vu209.Character.HumanoidRootPart.Position).Magnitude
-        local v211 = CheckNearestTeleporter(pu208)
-        
-        if v211 then
-            requestEntrance(v211)
-            task.wait(0.2)
-            v210 = (pu208.Position - vu209.Character.HumanoidRootPart.Position).Magnitude
-        end
-        if not vu209.Character:FindFirstChild("PartTele") then
-            local vu212 = Instance.new("Part", vu209.Character)
-            vu212.Size = Vector3.new(10, 1, 10)
-            vu212.Name = "PartTele"
-            vu212.Anchored = true
-            vu212.Transparency = 1
-            vu212.CanCollide = false
-            vu212.CFrame = WaitHRP(vu209).CFrame
-            local v213 = vu212
-            vu212.GetPropertyChangedSignal(v213, "CFrame"):Connect(function()
-                if IsTweening then
-                    task.wait()
-                    if vu209.Character and vu209.Character:FindFirstChild("HumanoidRootPart") then
-                        local v214 = vu212.CFrame
-                        WaitHRP(vu209).CFrame = CFrame.new(v214.Position.X, pu208.Position.Y, v214.Position.Z)
-                    end
-                end
-            end)
-        end
-        IsTweening = true
-        local v215 = 350
-        if v210 <= 300 then
-            v215 = v215 * 4
-        end
-        local v216 = TweenService:Create(vu209.Character.PartTele, TweenInfo.new(v210 / v215, Enum.EasingStyle.Linear), {
-            ["CFrame"] = pu208
-        })
-        v216:Play()
-        v216.Completed:Connect(function(p217)
-            if p217 == Enum.PlaybackState.Completed then
-                if vu209.Character:FindFirstChild("PartTele") then
-                    vu209.Character.PartTele:Destroy()
-                end
-                IsTweening = false
-            end
-        end)
-    end
-end
-
-local function StopTween()
-    local player = game.Players.LocalPlayer
-    if player.Character and player.Character:FindFirstChild("PartTele") then
-        player.Character.PartTele:Destroy()
-    end
-    IsTweening = false
-end
 -- [RedzHub Logic End]
 
 local currentChest = nil
@@ -2149,7 +2033,7 @@ task.spawn(function()
                 local chest = GetBestChest()
                 
                 if chest then
-                    RedzTween(chest.CFrame)
+                    TweenX(chest.CFrame)
                     
                     -- Optional: Fire touch interest if close
                     if (LocalPlayer.Character.HumanoidRootPart.Position - chest.Position).Magnitude < 15 and firetouchinterestFn then
