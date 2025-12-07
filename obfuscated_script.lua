@@ -763,6 +763,7 @@ local RunService = game:GetService("RunService")
 
 local _tween = nil
 local _noclip = nil
+local _lastDest = nil
 
 function TweenX(target)
     if not LocalPlayer.Character then return end
@@ -771,6 +772,28 @@ function TweenX(target)
 
     local targetCFrame = (typeof(target) == "Vector3" and CFrame.new(target)) or (typeof(target) == "CFrame" and target)
     if not targetCFrame then return end
+
+    local currentPos = root.Position
+    local targetPos = targetCFrame.Position
+    local horizontalDist = (Vector3.new(targetPos.X, 0, targetPos.Z) - Vector3.new(currentPos.X, 0, currentPos.Z)).Magnitude
+    
+    local finalDestination = targetCFrame
+    local speed = 350 -- Studs per second
+    
+    -- Safety Height Logic
+    if horizontalDist > 150 then
+        -- If far, fly high
+        local safeY = 350
+        if targetPos.Y > safeY then
+            safeY = targetPos.Y + 50
+        end
+        finalDestination = CFrame.new(targetPos.X, safeY, targetPos.Z)
+    end
+
+    -- Optimization: Don't restart tween if destination is same
+    if _tween and _tween.PlaybackState == Enum.PlaybackState.Playing and _lastDest and (finalDestination.Position - _lastDest.Position).Magnitude < 1 then
+        return
+    end
 
     -- Cancel existing tween
     if _tween then
@@ -797,23 +820,7 @@ function TweenX(target)
         end)
     end
 
-    local currentPos = root.Position
-    local targetPos = targetCFrame.Position
-    local horizontalDist = (Vector3.new(targetPos.X, 0, targetPos.Z) - Vector3.new(currentPos.X, 0, currentPos.Z)).Magnitude
-    
-    local finalDestination = targetCFrame
-    local speed = 350 -- Studs per second
-    
-    -- Safety Height Logic
-    if horizontalDist > 150 then
-        -- If far, fly high
-        local safeY = 350
-        if targetPos.Y > safeY then
-            safeY = targetPos.Y + 50
-        end
-        finalDestination = CFrame.new(targetPos.X, safeY, targetPos.Z)
-    end
-
+    _lastDest = finalDestination
     local distance = (root.Position - finalDestination.Position).Magnitude
     local time = distance / speed
     
@@ -827,6 +834,7 @@ function TweenX(target)
         root.CFrame = targetCFrame
         _tween:Cancel()
         _tween = nil
+        _lastDest = nil
     end
 end
 
