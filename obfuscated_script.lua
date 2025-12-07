@@ -207,7 +207,7 @@ local TabIcons = {
     Update = "6034308946",
     Dashboard = "6022668883",
     Main = "6031068423",
-    Stats = "6023565892", -- Changed to Bones icon (Graph-like) as fallback
+    Stats = "6023565892",
     Shop = "6031265970",
     Materials = "6035056487",
     Bones = "6023565892",
@@ -220,7 +220,9 @@ local TabIcons = {
 }
 
 local function GetIcon(name)
-    return TabIcons[name] or TabIcons.Default
+    local id = TabIcons[name] or TabIcons.Default
+    if not id then return "rbxassetid://6031097225" end -- Fallback safety
+    return "rbxassetid://" .. id
 end
 
 local lastHopAttempt = 0
