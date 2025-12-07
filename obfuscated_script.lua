@@ -961,8 +961,10 @@ function FastAttack:AttackNearest()
                 local hitPart = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Head")
                 if hitPart then
                     local dist = (hitPart.Position - myRoot.Position).Magnitude
-                    if dist < 100 then
+                    -- Increased range to 150 to catch brought mobs that might be slightly offset
+                    if dist < 150 then
                         table.insert(enemiesToHit, {enemy, hitPart})
+                        -- Prioritize the closest one as the "base" for the hit
                         if dist < closestDist then
                             closestDist = dist
                             baseEnemy = hitPart
@@ -987,9 +989,6 @@ function FastAttack:AttackNearest()
         local tool = character:FindFirstChildOfClass("Tool")
         if tool then
             tool:Activate()
-            -- Backup Click
-            game:GetService("VirtualUser"):CaptureController()
-            game:GetService("VirtualUser"):Button1Down(Vector2.new(1280, 672))
         end
     end
 end
@@ -1703,9 +1702,11 @@ RunService.Heartbeat:Connect(function()
                         pcall(function()
                             other.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame
                             other.HumanoidRootPart.CanCollide = false
-                            other.HumanoidRootPart.Anchored = true
+                            other.HumanoidRootPart.Size = Vector3.new(5, 5, 5)
+                            other.HumanoidRootPart.Transparency = 0.5
                             other.Humanoid.WalkSpeed = 0
-                            other.Humanoid:ChangeState(11)
+                            other.Humanoid.PlatformStand = true
+                            -- Removed Anchored = true and ChangeState(11) to prevent desync
                         end)
                     end
                 end
