@@ -508,11 +508,10 @@ local Window = Luna:CreateWindow({
 Window:CreateHomeTab({
     SupportedExecutors = {"Synapse Z", "Solara", "Fluxus", "Delta"},
     DiscordInvite = "4JuSYHStaF",
-    Icon = 1
 })
 
 -- Combat Tab
-local CombatTab = Window:CreateTab({Name = "Combat", Icon = "sports_martial_arts", ImageSource = "Material", ShowTitle = true})
+local CombatTab = Window:CreateTab({Name = "Combat"})
 CombatTab:CreateSection("Aimbot")
 CombatTab:CreateToggle({Name = "Silent Aim", CurrentValue = Settings.Combat.SilentAim, Callback = function(v) Settings.Combat.SilentAim = v end}, "SilentAim")
 CombatTab:CreateToggle({Name = "Auto Aim (Camera)", CurrentValue = Settings.Combat.AutoAim, Callback = function(v) Settings.Combat.AutoAim = v end}, "AutoAim")
@@ -540,7 +539,7 @@ CombatTab:CreateSlider({Name = "Melee Prediction (s)", Range = {0, 0.5}, Increme
 CombatTab:CreateSlider({Name = "Melee Random Offset", Range = {0, 15}, Increment = 1, CurrentValue = Settings.Combat.Profiles.Melee.RandomOffset, Callback = function(v) Settings.Combat.Profiles.Melee.RandomOffset = v end}, "MeleeRand")
 
 -- Player Tab
-local PlayerTab = Window:CreateTab({Name = "Player", Icon = "directions_run", ImageSource = "Material", ShowTitle = true})
+local PlayerTab = Window:CreateTab({Name = "Player"})
 PlayerTab:CreateSection("Movement")
 PlayerTab:CreateToggle({Name = "WalkSpeed", CurrentValue = Settings.Player.WalkSpeedEnabled, Callback = function(v) Settings.Player.WalkSpeedEnabled = v; applyWalkSpeed() end}, "WalkSpeedToggle")
 PlayerTab:CreateSlider({Name = "WalkSpeed Value", Range = {16, 200}, Increment = 5, CurrentValue = Settings.Player.WalkSpeedValue, Callback = function(v) Settings.Player.WalkSpeedValue = v; applyWalkSpeed() end}, "WalkSpeedValue")
@@ -550,7 +549,7 @@ PlayerTab:CreateToggle({Name = "Infinite Jump", CurrentValue = Settings.Player.I
 PlayerTab:CreateToggle({Name = "Noclip", CurrentValue = Settings.Player.Noclip, Callback = function(v) Settings.Player.Noclip = v end}, "Noclip")
 
 -- ESP Tab
-local ESPTab = Window:CreateTab({Name = "ESP", Icon = "visibility", ImageSource = "Material", ShowTitle = true})
+local ESPTab = Window:CreateTab({Name = "ESP"})
 ESPTab:CreateSection("Player ESP")
 ESPTab:CreateToggle({Name = "Enable ESP", CurrentValue = Settings.ESP.Enabled, Callback = function(v) Settings.ESP.Enabled = v; if not v then clearESP() end end}, "EnableESP")
 ESPTab:CreateColorPicker({Name = "ESP Color", Color = Settings.ESP.BoxColor, Callback = function(c) Settings.ESP.BoxColor = c end}, "ESPColor")
@@ -576,7 +575,7 @@ ESPTab:CreateColorPicker({Name = "Highlight Color", Color = Settings.ESP.Highlig
 ESPTab:CreateSlider({Name = "Font Size", Range = {10, 24}, Increment = 1, CurrentValue = Settings.ESP.FontSize, Callback = function(v) Settings.ESP.FontSize = v end}, "ESPFontSize")
 
 -- Teleport / Utility Tab
-local TeleTab = Window:CreateTab({Name = "Teleports", Icon = "travel_explore", ImageSource = "Material", ShowTitle = true})
+local TeleTab = Window:CreateTab({Name = "Teleports"})
 TeleTab:CreateSection("Server")
 TeleTab:CreateButton({Name = "Rejoin Server", Callback = function()
     pcall(function()
@@ -613,7 +612,7 @@ if UserInputService.TouchEnabled and FOVCircle then
 end
 
 -- Settings / Config
-local SettingsTab = Window:CreateTab({Name = "Settings", Icon = "settings", ImageSource = "Material", ShowTitle = true})
+local SettingsTab = Window:CreateTab({Name = "Settings"})
 SettingsTab:BuildThemeSection()
 SettingsTab:BuildConfigSection()
 Luna:LoadAutoloadConfig()
