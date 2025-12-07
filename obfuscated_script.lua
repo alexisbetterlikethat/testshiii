@@ -1663,10 +1663,18 @@ task.spawn(function()
                     else
                         -- Quest Active: Find and Kill
                         local targetName = questData.Mob
-                        local enemy = nil
+                        local enemy = _G.CurrentTarget
                         
-                        -- Find closest living enemy (ignoring blacklisted)
-                        if workspace:FindFirstChild("Enemies") then
+                        -- Validate existing target
+                        if enemy then
+                            if not enemy.Parent or not enemy:FindFirstChild("Humanoid") or enemy.Humanoid.Health <= 0 or BlacklistedEnemies[enemy] or enemy.Name ~= targetName then
+                                enemy = nil
+                                _G.CurrentTarget = nil
+                            end
+                        end
+                        
+                        -- Find closest living enemy (ignoring blacklisted) if no valid target
+                        if not enemy and workspace:FindFirstChild("Enemies") then
                             for _, v in pairs(workspace.Enemies:GetChildren()) do
                                 if v.Name == targetName and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and v:FindFirstChild("HumanoidRootPart") then
                                     if not BlacklistedEnemies[v] then
