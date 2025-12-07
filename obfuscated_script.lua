@@ -862,27 +862,6 @@ function TweenX(target)
     local speed = 350
     if dist < 200 then speed = 500 end
     
-    -- Fix: Ensure we don't dip below the target height or current height unnecessarily
-    -- If we are high up, stay high until we are over the target
-    local startY = root.Position.Y
-    local targetY = targetCFrame.Position.Y
-    
-    -- If moving far, maintain a safe height
-    if dist > 150 then
-        local safeY = math.max(startY, targetY, 300) -- Fly at least at 300 or current/target height
-        -- Create a multi-stage tween if needed (Up -> Over -> Down), but for now let's just ensure linear path doesn't clip
-        -- Actually, Redz logic is linear. The "dip" might be due to gravity or physics fighting the CFrame set.
-        -- We are setting Velocity to zero, so physics shouldn't be an issue.
-        -- The issue might be the linear path cutting through the ground/water if the destination is lower.
-        
-        -- Let's force a high path if the distance is significant
-        if (startY < safeY - 50) or (targetY < safeY - 50) then
-             -- This would require a sequence. For now, let's just stick to the requested fix: "hover down a bit"
-             -- This implies the user feels they are sinking.
-             -- We will ensure the CFrame set is strict and maybe add a small offset to the part.
-        end
-    end
-
     local info = TweenInfo.new(dist/speed, Enum.EasingStyle.Linear)
     local tween = TweenService:Create(partTele, info, {CFrame = targetCFrame})
     tween:Play()
