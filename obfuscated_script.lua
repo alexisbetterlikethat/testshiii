@@ -444,10 +444,13 @@ local function AnchorEnemy(enemy)
     local humanoid = enemy and enemy:FindFirstChildOfClass("Humanoid")
     if not hrp or not humanoid then return end
     hrp.CanCollide = false
-    hrp.Size = Vector3.new(60, 60, 60)
+    hrp.Anchored = false -- keep server hit detection reliable
+    hrp.Size = Vector3.new(30, 30, 30)
+    hrp.AssemblyLinearVelocity = Vector3.zero
     humanoid.WalkSpeed = 0
     humanoid.JumpPower = 0
     humanoid.AutoRotate = false
+    humanoid.PlatformStand = true
 end
 
 local function GetClosestActiveEnemy(maxDistance)
@@ -1693,8 +1696,10 @@ RunService.Heartbeat:Connect(function()
         pcall(function()
             target.Humanoid.WalkSpeed = 0
             target.HumanoidRootPart.Velocity = Vector3.zero
-            target.HumanoidRootPart.Anchored = true
+            target.HumanoidRootPart.Anchored = false -- avoid making some mobs unhittable
             target.HumanoidRootPart.CanCollide = false
+            target.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+            target.Humanoid.PlatformStand = true
         end)
 
         -- Bring Nearby Mobs to Target (Cluster)
