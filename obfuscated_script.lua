@@ -943,6 +943,11 @@ function FastAttack:AttackNearest()
     -- Anti-Sit
     local humanoid = character:FindFirstChild("Humanoid")
     if humanoid and humanoid.Sit then humanoid.Sit = false end
+    
+    -- Ensure we are not in PlatformStand if we want to attack visually
+    if humanoid and humanoid.PlatformStand then
+        humanoid.PlatformStand = false
+    end
 
     local enemiesToHit = {}
     local baseEnemy = nil
@@ -1854,14 +1859,36 @@ task.spawn(function()
 
                             -- Look at Enemy
                             local farmPos = CFrame.new(targetPos, enemy.HumanoidRootPart.Position)
-                            TP2(farmPos)
                             
-                            -- Attack (Force Trigger)
-                            EquipPreferredWeapon()
-                            EnsureHaki()
+                            -- Distance Check for Attack Mode
+                            local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+                            local distToPos = (myPos - targetPos).Magnitude
                             
-                            -- 1. Fast Attack Call
-                            FastAttack:AttackNearest()
+                            if distToPos > 10 then
+                                -- Too far, Tween to position
+                                TP2(farmPos)
+                            else
+                                -- Close enough, Stop Tween and Attack
+                                if _G.ActiveTween then _G.ActiveTween:Cancel() end
+                                if _G.TweenConnection then _G.TweenConnection:Disconnect() end
+                                
+                                -- Unanchor and Float
+                                LocalPlayer.Character.HumanoidRootPart.Anchored = false
+                                LocalPlayer.Character.HumanoidRootPart.CFrame = farmPos -- Snap to exact pos
+                                LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.zero
+                                LocalPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+                                
+                                if LocalPlayer.Character.Humanoid.PlatformStand then
+                                    LocalPlayer.Character.Humanoid.PlatformStand = false
+                                end
+                                
+                                -- Attack (Force Trigger)
+                                EquipPreferredWeapon()
+                                EnsureHaki()
+                                
+                                -- 1. Fast Attack Call
+                                FastAttack:AttackNearest()
+                            end
                         else
                             -- No enemy found: Go to Spawn
                             _G.CurrentTarget = nil
