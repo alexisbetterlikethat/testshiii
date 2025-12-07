@@ -166,15 +166,14 @@ if FOVCircle then
 end
 
 local function updateFOVPosition()
+    if not FOVCircle then return end
     local pos
     if UserInputService.TouchEnabled then
         pos = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     else
         pos = Vector2.new(Mouse.X, Mouse.Y)
     end
-    if FOVCircle then
-        FOVCircle.Position = pos
-    end
+    FOVCircle.Position = pos
 end
 
 -- Target acquisition
@@ -212,10 +211,12 @@ end
 
 -- Auto Aim (camera assist)
 RunService.RenderStepped:Connect(function(dt)
-    FOVCircle.Visible = Settings.Combat.ShowFOV
-    local profile = getWeaponProfile()
-    FOVCircle.Radius = profile.FOV or Settings.Combat.FOVRadius
-    updateFOVPosition()
+    if FOVCircle then
+        FOVCircle.Visible = Settings.Combat.ShowFOV
+        local profile = getWeaponProfile()
+        FOVCircle.Radius = profile.FOV or Settings.Combat.FOVRadius
+        updateFOVPosition()
+    end
 
     if Settings.Combat.AutoAim then
         local target = getClosestTarget()
