@@ -1,192 +1,198 @@
--- MINIMAL Cheat Spy - Won't crash your game
+-- PASSIVE Cheat Monitor - No hooks, just observation
 print("=== CHEAT SPY ACTIVE ===")
 
 local logs = {}
 
-local function log(category, message, data)
-    local entry = string.format("[%s] [%s] %s: %s", 
+local function log(category, message)
+    local entry = string.format("[%s] [%s] %s", 
         os.date("%X"),
         category,
-        message,
-        tostring(data or "")
+        message
     )
     table.insert(logs, entry)
     print(entry)
 end
 
--- Hook Instance.new to detect cheat elements
-local oldNew = Instance.new
-Instance.new = function(className, parent)
-    local obj = oldNew(className, parent)
-    
-    -- Detect ESP
-    if className == "Highlight" then
-        log("ESP", "Glow ESP created", parent and parent.Name or "?")
-    elseif className == "BoxHandleAdornment" then
-        log("ESP", "Box ESP created", parent and parent.Name or "?")
-    elseif className == "Beam" then
-        log("ESP", "Tracer beam created", parent and parent.Name or "?")
-    elseif className == "BillboardGui" then
-        log("ESP", "Distance label created", parent and parent.Name or "?")
-    elseif className == "ScreenGui" then
-        log("UI", "GUI created", obj.Name)
-    elseif className == "UIStroke" then
-        log("AIMBOT", "FOV circle stroke", "Color: " .. tostring(obj.Color))
-    end
-    
-    return obj
-end
-
--- Hook HttpGet
-local oldHttpGet = game.HttpGet
-game.HttpGet = function(self, url)
-    log("DOWNLOAD", "Fetching", url)
-    local result = oldHttpGet(self, url)
-    log("DOWNLOAD", "Got", #result .. " characters")
-    return result
-end
-
--- Hook loadstring
-local oldLoadstring = loadstring
-loadstring = function(source)
-    log("EXEC", "Loading code", #source .. " chars")
-    return oldLoadstring(source)
-end
-
--- Monitor for cheat activity passively
 local Player = game:GetService("Players").LocalPlayer
 local RunService = game:GetService("RunService")
 
--- Watch for camera snapping (aimbot)
-local lastCFrame = workspace.CurrentCamera.CFrame
+log("INIT", "Spy started - waiting for cheat to load...")
+
+-- Monitor camera for aimbot
+local Camera = workspace.CurrentCamera
+local lastCFrame = Camera.CFrame
 local snapCount = 0
 
 RunService.RenderStepped:Connect(function()
-    local currentCFrame = workspace.CurrentCamera.CFrame
+    local current = Camera.CFrame
     
-    if currentCFrame ~= lastCFrame then
-        local rotation = math.deg(math.acos(
-            math.clamp(currentCFrame.LookVector:Dot(lastCFrame.LookVector), -1, 1)
-        ))
+    if current ~= lastCFrame then
+        local angle = math.deg(math.acos(math.clamp(
+            current.LookVector:Dot(lastCFrame.LookVector), -1, 1
+        )))
         
-        if rotation > 10 then
+        if angle > 15 then
             snapCount = snapCount + 1
-            if snapCount % 30 == 0 then
-                log("AIMBOT", "Camera snap", string.format("%.1f degrees", rotation))
+            if snapCount % 20 == 0 then
+                log("AIMBOT", string.format("Camera snap detected (%.1f°)", angle))
             end
         end
     end
     
-    lastCFrame = currentCFrame
+    lastCFrame = current
 end)
 
--- Watch for ESP elements being added
+-- Scan for ESP and GUI elements every 2 seconds
 task.spawn(function()
-    while task.wait(3) do
-        local highlights = 0
-        local beams = 0
-        local boxes = 0
-        
-        for _, player in pairs(game:GetService("Players"):GetPlayers()) do
-            if player ~= Player and player.Character then
-                -- Count highlights (glow ESP)
-                if player.Character:FindFirstChildOfClass("Highlight") then
-                    highlights = highlights + 1
-                end
-                
-                -- Count beams (tracers)
-                for _, obj in pairs(player.Character:GetDescendants()) do
-                    if obj:IsA("Beam") then
-                        beams = beams + 1
-                    elseif obj:IsA("BoxHandleAdornment") then
-                        boxes = boxes + 1
-                    end
-                end
-            end
-        end
-        
-        if highlights > 0 or beams > 0 or boxes > 0 then
-            log("ESP", "Active", string.format("Glow:%d Tracers:%d Boxes:%d", highlights, beams, boxes))
-        end
-        
-        -- Check for FOV circle
+    local lastFOVState = false
+    local lastESPCount = 0
+    
+    while task.wait(2) do
+        -- Check PlayerGui for FOV circle
         local playerGui = Player:FindFirstChild("PlayerGui")
         if playerGui then
             local fovGui = playerGui:FindFirstChild("AimbotFOV")
             if fovGui then
                 local frame = fovGui:FindFirstChild("Frame")
-                if frame and frame.Visible then
-                    log("AIMBOT", "FOV circle visible", "Radius: " .. (frame.Size.X.Offset / 2))
+                if frame then
+                    local isVisible = fovGui.Enabled
+                    if isVisible and not lastFOVState then
+                        local radius = frame.Size.X.Offset / 2
+                        log("AIMBOT", string.format("FOV Circle enabled (Radius: %d)", radius))
+                        lastFOVState = true
+                    elseif not isVisible and lastFOVState then
+                        log("AIMBOT", "FOV Circle disabled")
+                        lastFOVState = false
+                    end
                 end
             end
+        end
+        
+        -- Count ESP elements
+        local highlights = 0
+        local beams = 0
+        local boxes = 0
+        local billboards = 0
+        
+        for _, player in pairs(game:GetService("Players"):GetPlayers()) do
+            if player ~= Player and player.Character then
+                local char = player.Character
+                
+                -- Glow ESP (Highlight)
+                for _, obj in pairs(char:GetChildren()) do
+                    if obj:IsA("Highlight") then
+                        highlights = highlights + 1
+                    end
+                end
+                
+                -- Tracers and Box ESP
+                for _, obj in pairs(char:GetDescendants()) do
+                    if obj:IsA("Beam") then
+                        beams = beams + 1
+                    elseif obj:IsA("BoxHandleAdornment") then
+                        boxes = boxes + 1
+                    elseif obj:IsA("BillboardGui") then
+                        billboards = billboards + 1
+                    end
+                end
+            end
+        end
+        
+        local totalESP = highlights + beams + boxes + billboards
+        
+        if totalESP > 0 and totalESP ~= lastESPCount then
+            log("ESP", string.format("Active - Glow:%d Tracers:%d Boxes:%d Distance:%d", 
+                highlights, beams, boxes, billboards))
+            lastESPCount = totalESP
+        elseif totalESP == 0 and lastESPCount > 0 then
+            log("ESP", "All ESP disabled")
+            lastESPCount = 0
         end
     end
 end)
 
--- Watch for infinite jump
-local function monitorCharacter(char)
+-- Monitor for infinite jump
+local function watchCharacter(char)
     task.wait(1)
     local humanoid = char:FindFirstChildOfClass("Humanoid")
     if not humanoid then return end
     
-    local airJumps = 0
-    local lastState = humanoid:GetState()
+    local midairJumps = 0
+    local lastState = Enum.HumanoidStateType.Freefall
     
-    humanoid.StateChanged:Connect(function(_, new)
+    humanoid.StateChanged:Connect(function(old, new)
         if new == Enum.HumanoidStateType.Jumping then
-            if lastState == Enum.HumanoidStateType.Freefall or 
-               lastState == Enum.HumanoidStateType.Jumping then
-                airJumps = airJumps + 1
-                if airJumps >= 2 then
-                    log("CHEAT", "Infinite Jump active", "Air jump #" .. airJumps)
+            -- Check if jumping while in air
+            if old == Enum.HumanoidStateType.Freefall or 
+               old == Enum.HumanoidStateType.Jumping then
+                midairJumps = midairJumps + 1
+                if midairJumps == 1 then
+                    log("CHEAT", "Infinite Jump detected (mid-air jump)")
                 end
             else
-                airJumps = 0
+                midairJumps = 0
             end
         elseif new == Enum.HumanoidStateType.Landed then
-            airJumps = 0
+            if midairJumps > 0 then
+                midairJumps = 0
+            end
         end
+        
         lastState = new
     end)
 end
 
 if Player.Character then
-    monitorCharacter(Player.Character)
+    watchCharacter(Player.Character)
 end
 
 Player.CharacterAdded:Connect(function(char)
-    log("PLAYER", "Character spawned", "")
-    monitorCharacter(char)
+    log("PLAYER", "Character respawned")
+    watchCharacter(char)
 end)
 
-print("=== SPY READY - Load cheat now ===")
+-- Watch for new GUIs being added
+Player:WaitForChild("PlayerGui").ChildAdded:Connect(function(gui)
+    if gui:IsA("ScreenGui") then
+        log("UI", string.format("New GUI added: %s", gui.Name))
+    end
+end)
 
--- Dump logs to clipboard
+print("=== SPY READY ===")
+print("Load your cheat now, then use the cheat features")
+print("Type: dumpLogs() to copy all logs to clipboard")
+
+-- Commands
 getgenv().dumpLogs = function()
     local output = "========== CHEAT SPY LOGS ==========\n"
-    output = output .. "Total entries: " .. #logs .. "\n\n"
+    output = output .. string.format("Captured %d events\n\n", #logs)
     
     for i, entry in ipairs(logs) do
-        output = output .. string.format("[%d] %s\n", i, entry)
+        output = output .. entry .. "\n"
     end
     
-    output = output .. "\n========== END LOGS =========="
+    output = output .. "\n========== END ==========\n"
     
-    -- Copy to clipboard
     if setclipboard then
         setclipboard(output)
-        print("✓ Logs copied to clipboard! (" .. #logs .. " entries)")
+        print(string.format("✓ %d logs copied to clipboard!", #logs))
     else
         print(output)
-        print("⚠ setclipboard not available - logs printed above")
+        warn("setclipboard not available")
     end
-    
-    return output
 end
 
 getgenv().clearLogs = function()
+    local count = #logs
     logs = {}
-    print("✓ Logs cleared!")
+    print(string.format("✓ Cleared %d logs", count))
 end
 
-print("Commands: dumpLogs() | clearLogs()")
+getgenv().showLogs = function()
+    print("\n=== RECENT LOGS ===")
+    local start = math.max(1, #logs - 20)
+    for i = start, #logs do
+        print(logs[i])
+    end
+    print(string.format("=== Showing last %d of %d logs ===\n", math.min(20, #logs), #logs))
+end
